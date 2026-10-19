@@ -9761,7 +9761,9 @@ const FICHAS_CS = [
         ['Material', 'medicao.tipoMaterial', 'texto', 2], ['Engenheiro responsável', 'medicao.engenheiro', 'texto']] },
       { tipo: 'campos', titulo: 'Compactação', campos: [
         ['Energia (N / I / M)', 'ident.energia', 'texto'], ['Nº de golpes', 'ident.golpes', 'num'],
-        ['Nº de camadas', 'ident.camadas', 'num'], ['Soquete', 'ident.soquete', 'texto']] },
+        ['Nº de camadas', 'ident.camadas', 'num'], ['Soquete', 'ident.soquete', 'texto'],
+        // a constante vai para a calibração da prensa escolhida (Sondagem → Calibrações)
+        ['Prensa do ISC nº', 'isc.prensa', 'texto'], ['Constante da prensa (K)', 'isc.constantePrensa', 'num']] },
     ] },
   { aba: 'csproctor', codigo: PF_CS + '-R2', titulo: 'Compactação (Proctor)',
     blocos: [{ tipo: 'grade', titulo: 'Pontos de compactação', colunas: ['Ponto 1', 'Ponto 2', 'Ponto 3', 'Ponto 4', 'Ponto 5'], idx: P5, linhas: [
@@ -10072,12 +10074,27 @@ function normalizarLido(v, tipo) {
   return t || null;
 }
 
-const lerCampoCs = c => c.startsWith('medicao.') ? estado.medicao[c.slice(8)] : lerCs(c);
+/* "isc.constantePrensa" não mora no estado: é o K da prensa escolhida no ISC, guardado nas calibrações */
+function prensaDaFicha(criar) {
+  const cfg = estado.csond.cfg; cfg.prensas = cfg.prensas || [];
+  const n = estado.csond.isc.prensa || cfg.prensaPadrao || '1';
+  let p = cfg.prensas.find(x => chaveMolde(x.numero) === chaveMolde(n));
+  if (!p && criar) { p = { numero: String(n), nome: 'PRENSA ' + n, k: null }; cfg.prensas.push(p); estado.csond.isc.prensa = p.numero; }
+  return p || null;
+}
+const lerCampoCs = c => c === 'isc.constantePrensa' ? ((prensaDaFicha(false) || {}).k ?? null)
+  : c.startsWith('medicao.') ? estado.medicao[c.slice(8)] : lerCs(c);
 function gravarCampoCs(c, v) {
   if (c === 'ident.energia' && v) {
     // escrito à mão: "I", "INTERMEDIÁRIA", "Interm." — vira a opção do app
     const t = String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
     v = t.startsWith('M') ? 'MODIFICADA' : t.startsWith('I') ? 'INTERMEDIARIA' : t.startsWith('N') ? 'NORMAL' : v;
+  }
+  if (c === 'isc.constantePrensa') { if (v !== null && v !== '') prensaDaFicha(true).k = v; return; }
+  if (c === 'isc.prensa' && v !== null && v !== '') {
+    // prensa que não está nas calibrações entra nelas (a constante vem no quadro ao lado)
+    const cfg = estado.csond.cfg; cfg.prensas = cfg.prensas || [];
+    if (!cfg.prensas.some(x => chaveMolde(x.numero) === chaveMolde(v))) cfg.prensas.push({ numero: String(v), nome: 'PRENSA ' + v, k: null });
   }
   if (c.startsWith('medicao.')) estado.medicao[c.slice(8)] = v;
   else gravarCs(c, v);
