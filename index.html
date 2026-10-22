@@ -1076,7 +1076,17 @@ body.modo-m031 [data-id-m031]{display:none;}
   #folhaImpressao{display:block !important;}
   *{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
   @page{size:A4 portrait; margin:8mm;}
+  /* o resumo do recorte sai com a folha deitada: uma linha por ensaio, muitas colunas */
+  @page paisagem{size:A4 landscape; margin:8mm;}
+  .folha.paisagem{page:paisagem;}
 }
+.acoes-lote{display:flex; flex-wrap:wrap; gap:8px;}
+.folha table.res-lote{font-size:6.6pt; margin-top:4px;}
+.folha table.res-lote th{font-size:6pt; padding:1px 2px; text-transform:none;}
+.folha table.res-lote td{padding:1.2px 2px; white-space:nowrap;}
+.folha table.res-lote td.tx{white-space:normal;}
+.folha table.res-lote tr.est td{font-weight:700; background:var(--rotulo);}
+.folha table.res-lote tr.est td.rot{text-align:right;}
 
 /* ================= SELEÇÃO DO TIPO DE ENSAIO ================= */
 .modos{display:grid; gap:11px;}
@@ -12302,9 +12312,11 @@ function montarPdfLote(escopo) {
   const alvo = $('anPdfLote');
   if (!alvo) return;
   const n = escopo.filter(e => e.foto).length;
-  alvo.innerHTML = n ? `<button type="button" class="btn" id="anGerarPdfLote">Gerar PDF dos ${n} ensaio(s) filtrado(s)</button>
-      <p class="hint" style="margin-top:8px">Um PDF só, com o relatório completo de cada ensaio do recorte, em ordem de data
-      e registro. Na janela de impressão, escolha <b>Salvar como PDF</b>.${n > 60 ? ' <b>Muitos ensaios: pode levar alguns segundos.</b>' : ''}</p>`
+  alvo.innerHTML = n ? `<div class="acoes-lote"><button type="button" class="btn" id="anGerarResumoLote">Resumo dos ${n} ensaio(s) filtrado(s)</button>
+      <button type="button" class="btn ghost" id="anGerarPdfLote">Gerar PDF dos ${n} ensaio(s) filtrado(s)</button>
+      <button type="button" class="btn ghost" id="anPlanilhaLote">Baixar planilha do resumo</button></div>
+      <p class="hint" style="margin-top:8px"><b>Resumo:</b> uma linha por ensaio (folha deitada), com médias, desvio, mínimo e máximo no fim.
+      <b>PDF:</b> o relatório completo de cada ensaio, em ordem de data e registro. Na janela de impressão, escolha <b>Salvar como PDF</b>.${n > 60 ? ' <b>Muitos ensaios: pode levar alguns segundos.</b>' : ''}</p>`
     : '';
 }
 
@@ -12588,6 +12600,8 @@ function ligarAnalise() {
     }
 
     if (e.target.closest('#anGerarPdfLote')) { gerarPdfLote(); return; }
+    if (e.target.closest('#anGerarResumoLote')) { gerarResumoLote(); return; }
+    if (e.target.closest('#anPlanilhaLote')) { baixarPlanilhaLote(); return; }
 
     if (e.target.closest('#anLimparPeriodo')) {
       anFiltro.de = anFiltro.ate = '';
@@ -12612,6 +12626,153 @@ function mudarMesAnalise(passo) {
      escolher */
   montarCalendario();
   $('anMesLabel').scrollIntoView({ block: 'nearest' });
+}
+
+
+/* ------------------------------------------------------------
+   RESUMO DO RECORTE — uma linha por ensaio, como a aba RESUMO da planilha
+   A caracterização de sondagem tem tabela própria (granulometria, limites,
+   classificações, compactação, ISC, MR); os demais tipos saem numa tabela
+   geral. Fecha com média, desvio, mínimo e máximo das colunas numéricas.
+   ------------------------------------------------------------ */
+
+const LINHAS_POR_FOLHA_RESUMO = 18;
+const v1 = (x, d) => (x === null || x === undefined || x === '' || !isFinite(x)) ? '' : fmt(x, d);
+
+/* [título, (resumo) => valor, casas (null = texto), largura] */
+const COLUNAS_RESUMO_CSOND = [
+  ['Registro', r => r.registro, null], ['Furo / PI', r => r.estaca, null], ['km', r => r.km, 3], ['Lado', r => r.lado, null],
+  ['Pista', r => r.pista, null], ['Data', r => dataBr(r.data), null],
+  ['1"', r => (r.passantes || [])[2], 1], ['3/8"', r => (r.passantes || [])[4], 1], ['Nº 4', r => (r.passantes || [])[5], 1],
+  ['Nº 10', r => (r.passantes || [])[6], 1], ['Nº 40', r => (r.passantes || [])[9], 1], ['Nº 200', r => (r.passantes || [])[12], 1],
+  ['LL (%)', r => r.np ? 'NP' : r.ll, 1], ['LP (%)', r => r.np ? 'NP' : r.lp, 1], ['IP (%)', r => r.np ? 'NP' : r.ip, 1],
+  ['IG', r => r.ig, 0], ['HRB', r => r.hrb, null], ['SUCS', r => r.sucs, null], ['MCT', r => r.mct, null],
+  ['Gs (g/cm³)', r => r.densReal, 3], ['γd máx (g/cm³)', r => r.dmax == null ? null : r.dmax / 1000, 3], ['h ót. (%)', r => r.hot, 1],
+  ['Exp. (%)', r => r.expansao, 2], ['ISC (%)', r => r.cbr, 1], ['MR (MPa)', r => r.mr, 0], ['Classificação', r => r.nomeSolo, null],
+];
+const COLUNAS_RESUMO_GERAL = [
+  ['Registro', r => r.registro, null], ['Data', r => dataBr(r.data), null], ['Ensaio', r => (MODOS[r.modo] || {}).nome || NOME_FAMILIA[r.familia] || '', null],
+  ['Obra', r => r.obra, null], ['Local', r => r.estaca, null], ['Camada / serviço', r => r.camada, null],
+  ['Material', r => r.material, null],
+  ['Situação', r => ({ atende: 'ATENDE', nao: 'NÃO ATENDE', romper: 'À ROMPER', sem: '—' })[situacaoDoEnsaio(r)], null],
+];
+
+function gruposDoResumo() {
+  const lista = ordemDoLote(escopoAnalise());
+  const cs = lista.filter(e => (e.resumo || {}).modo === 'csond'), outros = lista.filter(e => (e.resumo || {}).modo !== 'csond');
+  return [
+    cs.length && { titulo: 'Resumo da Caracterização de Sondagem', colunas: COLUNAS_RESUMO_CSOND, ensaios: cs,
+      sub: 'Granulometria (% que passa) · limites · classificações · compactação · ISC · MR' },
+    outros.length && { titulo: 'Resumo dos Ensaios', colunas: COLUNAS_RESUMO_GERAL, ensaios: outros, sub: 'Um ensaio por linha' },
+  ].filter(Boolean);
+}
+
+/** Média, desvio, mínimo e máximo de cada coluna numérica. */
+function linhasEstatisticas(colunas, ensaios) {
+  const vals = colunas.map(([, f, casas]) => casas === null ? null
+    : ensaios.map(e => f(e.resumo || {})).filter(x => typeof x === 'number' && isFinite(x)));
+  return [['Média', st => st.media], ['Desvio padrão', st => st.dp], ['Mínimo', st => st.min], ['Máximo', st => st.max]].map(([rot, pega]) =>
+    `<tr class="est"><td colspan="${colunas.findIndex(c => c[2] !== null)}" class="rot">${rot}</td>${colunas.map(([, , casas], i) => {
+      if (i < colunas.findIndex(c => c[2] !== null)) return '';
+      const st = vals[i] && vals[i].length ? estatistica(vals[i]) : null;
+      return `<td>${st ? v1(pega(st), casas) : ''}</td>`; }).join('')}</tr>`).join('');
+}
+
+function topoResumo(g, pagina, total, regs) {
+  const datas = g.ensaios.map(dataDoEnsaio).filter(Boolean).sort();
+  const obras = [...new Set(g.ensaios.map(e => (e.resumo || {}).obra).filter(Boolean))];
+  const cel = (k, v, span = 1) => `<td class="k">${k}</td><td class="v" colspan="${span}">${v || '—'}</td>`;
+  return `<div class="quadro"><div class="topo">
+      <div class="logo${MARCA.logoLarga ? ' larga' : ''}">${logoAtual() ? `<img src="${logoAtual()}" alt="${nomeEmpresa()}">`
+        : `<div class="empresa">${nomeEmpresa()}</div>`}</div>
+      <div class="tit"><h1>${g.titulo}</h1><div class="sub2">${g.sub}</div></div>
+      <div class="pag"><div><b>Ensaios:</b> ${g.ensaios.length}</div><div><b>Folha:</b> ${pagina} / ${total}</div>
+        <div><b>Emitido:</b> ${dataBr(hojeIso())}</div></div></div></div>
+    <table class="cab"><tr>${cel('Obra', obras.join(' · '), 3)}${cel('Período', datas.length ? `${dataBr(datas[0])} a ${dataBr(datas[datas.length - 1])}` : '')}</tr>
+      <tr>${cel('Registros', regs, 3)}${cel('Filtro', textoDoRecorte())}</tr></table>`;
+}
+
+function textoDoRecorte() {
+  const p = [];
+  if (anFiltro.registro) p.push('registro "' + anFiltro.registro + '"');
+  ['obra', 'rodovia', 'camada'].forEach(k => { if (anFiltro[k]) p.push(anFiltro[k]); });
+  if (anFiltro.familia) p.push(NOME_FAMILIA[anFiltro.familia] || anFiltro.familia);
+  if (anFiltro.de || anFiltro.ate) p.push(textoDoIntervalo());
+  return p.join(' · ') || 'todos os ensaios';
+}
+
+/** Quem assina o resumo: o laboratorista e o engenheiro do ensaio mais recente do recorte. */
+function assinaturasResumo(ensaios) {
+  const ult = ensaios[ensaios.length - 1];
+  const m = (((ult || {}).foto || {}).estado || {}).medicao || {};
+  const resp = m.engenheiro || MARCA.responsavel || '';
+  return `<div class="assin"><div>${m.laboratorista || ''}<br><span class="cargo">Laboratorista</span></div>
+    <div>${resp}<br><span class="cargo">Engenheiro Responsável</span></div></div>`;
+}
+
+function folhasDoResumo() {
+  const grupos = gruposDoResumo();
+  const paginas = [];
+  grupos.forEach(g => {
+    const regs = g.ensaios.map(e => (e.resumo || {}).registro).filter(Boolean);
+    const faixa = regs.length > 6 ? `${regs[0]} … ${regs[regs.length - 1]} (${regs.length})` : regs.join(', ');
+    const n = Math.max(1, Math.ceil(g.ensaios.length / LINHAS_POR_FOLHA_RESUMO));
+    for (let p = 0; p < n; p++) {
+      const parte = g.ensaios.slice(p * LINHAS_POR_FOLHA_RESUMO, (p + 1) * LINHAS_POR_FOLHA_RESUMO);
+      const corpo = parte.map(e => { const r = e.resumo || {};
+        return `<tr>${g.colunas.map(([, f, casas]) => { const x = f(r);
+          return `<td${casas === null ? ' class="tx"' : ''}>${casas === null || typeof x !== 'number' ? (x ?? '') : v1(x, casas)}</td>`; }).join('')}</tr>`; }).join('');
+      const ultima = p === n - 1;
+      const csond = g.colunas === COLUNAS_RESUMO_CSOND;
+      const cabeca = csond
+        ? `<tr><th colspan="6">Identificação</th><th colspan="6">% que passa</th><th colspan="7">Limites e classificação</th>
+            <th>Real</th><th colspan="3">Compactação</th><th>ISC</th><th>MR</th><th></th></tr>` : '';
+      paginas.push({ g, html: `${topoResumo(g, 0, 0, faixa)}
+        <table class="f res-lote${csond ? ' cs' : ''}"><thead>${cabeca}<tr>${g.colunas.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead>
+        <tbody>${corpo}${ultima && g.ensaios.length > 1 ? linhasEstatisticas(g.colunas, g.ensaios) : ''}</tbody></table>
+        ${ultima ? assinaturasResumo(g.ensaios) : ''}` });
+    }
+  });
+  const total = paginas.length;
+  return paginas.map((p, i) => `<div class="folha paisagem">${p.html
+    .replace('<div><b>Folha:</b> 0 / 0</div>', `<div><b>Folha:</b> ${i + 1} / ${total}</div>`)}</div>`).join('');
+}
+
+function gerarResumoLote() {
+  if (!escopoAnalise().length) return;
+  const folha = $('folhaImpressao');
+  folha.innerHTML = folhasDoResumo();
+  window.addEventListener('afterprint', () => atualizar(), { once: true });
+  folha.classList.add('montando');
+  requestAnimationFrame(() => { folha.classList.remove('montando'); window.print(); });
+}
+
+/** A mesma tabela em CSV (abre no Excel), com as 13 peneiras na sondagem. */
+function baixarPlanilhaLote() {
+  const grupos = gruposDoResumo();
+  if (!grupos.length) return;
+  const PEN = ['2"', '1 1/2"', '1"', '3/4"', '3/8"', 'Nº 4', 'Nº 10', 'Nº 16', 'Nº 30', 'Nº 40', 'Nº 60', 'Nº 100', 'Nº 200'];
+  const cel = x => { if (x === null || x === undefined) return '';
+    const t = typeof x === 'number' ? String(x).replace('.', ',') : String(x);
+    return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  const linhas = [];
+  grupos.forEach((g, gi) => {
+    if (gi) linhas.push('');
+    let cols = g.colunas.map(([t, f, casas]) => [t, r => { const x = f(r); return typeof x === 'number' && casas !== null ? +x.toFixed(casas) : x; }]);
+    if (g.colunas === COLUNAS_RESUMO_CSOND) {
+      const i0 = cols.findIndex(c => c[0] === '1"');
+      cols.splice(i0, 6, ...PEN.map((t, k) => ['% passa ' + t, r => { const x = (r.passantes || [])[k]; return typeof x === 'number' ? +x.toFixed(1) : ''; }]));
+      cols.splice(cols.findIndex(c => c[0] === 'Pista') + 1, 0, ['Latitude', r => r.latitude], ['Longitude', r => r.longitude], ['Obra', r => r.obra], ['Camada', r => r.camada]);
+      cols.push(['% silte', r => r.silte == null ? '' : +r.silte.toFixed(1)], ['% argila', r => r.argila == null ? '' : +r.argila.toFixed(1)], ['Energia', r => r.energia]);
+    }
+    linhas.push(cols.map(c => cel(c[0])).join(';'));
+    g.ensaios.forEach(e => linhas.push(cols.map(c => cel(c[1](e.resumo || {}))).join(';')));
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = `resumo-ensaios-${hojeIso()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
 /* ============================================================
