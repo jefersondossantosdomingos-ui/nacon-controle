@@ -1544,6 +1544,7 @@ summary:hover{color:var(--text);}
     <h2>Recorte da análise <span class="tag">Vale para tudo nesta aba</span></h2>
     <div class="grid4" id="filtrosAnalise"></div>
     <p class="hint" id="anResumoFiltro"></p>
+    <div id="anPdfLote"></div>
   </div>
 
   <div class="card">
@@ -12100,7 +12101,7 @@ let anMesRef = null;      // primeiro dia do mês exibido
 let anDiaSel = null;      // dia escolhido no calendário
 /* `de` e `ate` são ISO (aaaa-mm-dd); vazio quer dizer sem limite daquele lado.
    Os dois vazios = tudo que está guardado. */
-const anFiltro = { obra:'', rodovia:'', camada:'', familia:'', de:'', ate:'' };
+const anFiltro = { obra:'', rodovia:'', camada:'', familia:'', registro:'', de:'', ate:'' };
 
 /* ------------------------------------------------------------
    Datas
@@ -12138,7 +12139,16 @@ function passaNoRecorte(e) {
   if (anFiltro.rodovia && r.rodovia !== anFiltro.rodovia) return false;
   if (anFiltro.camada && r.camada !== anFiltro.camada) return false;
   if (anFiltro.familia && (r.familia || 'solos') !== anFiltro.familia) return false;
+  if (anFiltro.registro && !registroBate(r.registro)) return false;
   return true;
+}
+
+/* Registro: pedaço do número, sem diferença de maiúscula/acento; vários separados
+   por vírgula valem como "qualquer um deles" — "T-001, T-005" ou só "T-0". */
+const semAcentoAn = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, '');
+function registroBate(reg) {
+  const r = semAcentoAn(reg);
+  return anFiltro.registro.split(/[,;]/).map(semAcentoAn).filter(Boolean).some(t => r.includes(t));
 }
 
 /**
@@ -12252,6 +12262,9 @@ function montarFiltrosAnalise() {
         ${familias.map(f => `<option value="${f}"${f === anFiltro.familia ? ' selected' : ''}>`
           + `${NOME_FAMILIA[f] || f}</option>`).join('')}
       </select></div>`
+    + `<div><label>Registro</label>
+        <input type="text" class="caixa-alta" data-an="registro" value="${atr(anFiltro.registro)}"
+          placeholder="Ex.: T-001 ou T-001, T-005"></div>`
     + `<div><label>De</label>
         <input type="date" data-an="de" value="${atr(anFiltro.de)}"></div>`
     + `<div><label>Até</label>
@@ -12272,6 +12285,51 @@ function montarFiltrosAnalise() {
       : `${escopo.length} de ${historico.length} ensaio(s) guardado(s) entram neste recorte, `
         + `considerando <b>${textoDoIntervalo()}</b>. Tocar num dia do calendário traz `
         + 'esse dia para as datas acima.';
+  montarPdfLote(escopo);
+}
+
+/* ------------------------------------------------------------
+   PDF do recorte — os relatórios de todos os ensaios filtrados num PDF só
+   ------------------------------------------------------------ */
+
+/** Ordem do lote: data do ensaio e, no mesmo dia, o registro. */
+function ordemDoLote(lista) {
+  return [...lista].sort((a, b) => dataDoEnsaio(a).localeCompare(dataDoEnsaio(b))
+    || String((a.resumo || {}).registro || '').localeCompare(String((b.resumo || {}).registro || ''), 'pt-BR', { numeric: true }));
+}
+
+function montarPdfLote(escopo) {
+  const alvo = $('anPdfLote');
+  if (!alvo) return;
+  const n = escopo.filter(e => e.foto).length;
+  alvo.innerHTML = n ? `<button type="button" class="btn" id="anGerarPdfLote">Gerar PDF dos ${n} ensaio(s) filtrado(s)</button>
+      <p class="hint" style="margin-top:8px">Um PDF só, com o relatório completo de cada ensaio do recorte, em ordem de data
+      e registro. Na janela de impressão, escolha <b>Salvar como PDF</b>.${n > 60 ? ' <b>Muitos ensaios: pode levar alguns segundos.</b>' : ''}</p>`
+    : '';
+}
+
+/** Monta as folhas de cada ensaio, uma atrás da outra, e manda imprimir. A tela volta ao que estava. */
+function gerarPdfLote() {
+  const lista = ordemDoLote(escopoAnalise().filter(e => e.foto));
+  if (!lista.length) return;
+  const guarda = fotografarEnsaio();
+  const partes = [];
+  try {
+    if (typeof FOLHAS_SO !== 'undefined') FOLHAS_SO = null;
+    if (typeof SECOES_SO !== 'undefined') SECOES_SO = null;
+    lista.forEach(e => {
+      aplicarEnsaio(e.foto);
+      partes.push($('folhaImpressao').innerHTML);
+    });
+  } finally {
+    aplicarEnsaio(guarda);
+  }
+  const folha = $('folhaImpressao');
+  folha.innerHTML = partes.join('');
+  // no celular a impressão não segura o script: as folhas do ensaio em tela voltam ao fechar a impressão
+  window.addEventListener('afterprint', () => atualizar(), { once: true });
+  folha.classList.add('montando');
+  requestAnimationFrame(() => { folha.classList.remove('montando'); window.print(); });
 }
 
 function montarKpis(escopo) {
@@ -12503,8 +12561,17 @@ function ligarAnalise() {
 
   aba.addEventListener('change', e => {
     const s = e.target.closest('[data-an]');
-    if (!s) return;
+    // o registro já filtrou enquanto se digitava; refazer a tela ao sair do campo
+    // trocaria o botão do PDF debaixo do dedo e o toque se perderia
+    if (!s || s.dataset.an === 'registro') return;
     anFiltro[s.dataset.an] = s.value;
+    montarAnalise();
+  });
+  // o registro filtra enquanto se digita
+  aba.addEventListener('input', e => {
+    const s = e.target.closest('input[data-an="registro"]');
+    if (!s) return;
+    anFiltro.registro = s.value;
     montarAnalise();
   });
 
@@ -12519,6 +12586,8 @@ function ligarAnalise() {
       montarAnalise();
       return;
     }
+
+    if (e.target.closest('#anGerarPdfLote')) { gerarPdfLote(); return; }
 
     if (e.target.closest('#anLimparPeriodo')) {
       anFiltro.de = anFiltro.ate = '';
