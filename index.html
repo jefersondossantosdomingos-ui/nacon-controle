@@ -1240,6 +1240,13 @@ summary{cursor:pointer; font-size:13.5px; color:var(--text-2); font-weight:600;}
 summary:hover{color:var(--text);}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;}
 .foot{color:var(--text-mut); font-size:12.5px; margin-top:18px; text-align:center; line-height:1.6;}
+.conta-aprov{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--mk-acento);color:var(--mk-acento-texto);font-size:11px;line-height:18px;text-align:center}
+.conta-aprov[hidden]{display:none}
+.ensaio-salvo .faltas{margin:8px 0 4px 18px;padding:0;font-size:13px;color:var(--mk-alerta-700)}
+.ensaio-salvo .ok-completo{margin:8px 0 4px;color:var(--mk-conforme-700)}
+.devolver-caixa{width:100%;margin-top:8px}
+.devolver-caixa textarea{width:100%}
+.ensaio-salvo.aprov-devolvido{border-color:var(--mk-critico)}
 </style>
 </head>
 <body>
@@ -1274,6 +1281,10 @@ summary:hover{color:var(--text);}
 <button type="button" data-aba="historico" data-modos="simples caracterizacao completo csond marshall m031 sondagem aplicacao concreto insumos">
     <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h8"/></svg>
     Histórico
+  </button>
+<button type="button" data-aba="aprovar" data-modos="simples caracterizacao completo csond marshall m031 sondagem aplicacao concreto insumos">
+    <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
+    Aprovar <span class="conta-aprov" hidden></span>
   </button>
 <button type="button" data-aba="analise" data-modos="simples caracterizacao completo csond marshall m031 sondagem aplicacao concreto insumos">
     <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -1587,6 +1598,11 @@ summary:hover{color:var(--text);}
   <div id="cardFichaEquip"></div>
 </section>
 
+<!-- ============ ABA · APROVAR ============ -->
+<section class="aba" id="aba-aprovar" data-modos="simples caracterizacao completo csond marshall m031 sondagem aplicacao concreto insumos">
+  <div id="aprovarConteudo"></div>
+</section>
+
 <!-- ============ ABA · ANÁLISE ============ -->
 <section class="aba" id="aba-analise" data-modos="simples caracterizacao completo csond marshall m031 sondagem aplicacao concreto insumos">
 
@@ -1752,6 +1768,7 @@ summary:hover{color:var(--text);}
       ensaio salvo e devolve a tela ao que você estava lançando.
     </p>
     <div id="histAviso"></div>
+    <div id="histForaAprov"></div>
     <div data-aviso-envio></div>
     <div id="listaHistorico"></div>
     <div style="display:flex; gap:9px; flex-wrap:wrap; margin-top:16px">
@@ -12475,7 +12492,7 @@ function domingoDaSemana(iso) {
 
 /** Valores que aparecem em cada filtro, tirados do que existe no histórico. */
 function opcoesDoHistorico(campo) {
-  return [...new Set(historico
+  return [...new Set(historicoAprovado()
     .map(e => String((e.resumo || {})[campo] || '').trim())
     .filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
@@ -12505,7 +12522,7 @@ function registroBate(reg) {
  * preciso converter para Date só para saber quem vem antes.
  */
 function escopoAnalise() {
-  return historico.filter(e => {
+  return historicoAprovado().filter(e => {
     if (!passaNoRecorte(e)) return false;
     const d = dataDoEnsaio(e);
     if (anFiltro.de && (!d || d < anFiltro.de)) return false;
@@ -12524,7 +12541,7 @@ function textoDoIntervalo() {
 }
 
 /** Ensaios do recorte, sem o filtro de período — é o que o calendário desenha. */
-function paraOCalendario() { return historico.filter(passaNoRecorte); }
+function paraOCalendario() { return historicoAprovado().filter(passaNoRecorte); }
 
 /* ------------------------------------------------------------
    Conformidade
@@ -12600,7 +12617,7 @@ function montarFiltrosAnalise() {
         ${opcoes.map(o => `<option${o === anFiltro[chave] ? ' selected' : ''}>${o}</option>`).join('')}
       </select></div>`;
 
-  const familias = [...new Set(historico.map(e => (e.resumo || {}).familia || 'solos'))];
+  const familias = [...new Set(historicoAprovado().map(e => (e.resumo || {}).familia || 'solos'))];
 
   const html =
     campos.map(([c, r, t]) => seletor(c, r, t, opcoesDoHistorico(c))).join('')
@@ -12624,12 +12641,12 @@ function montarFiltrosAnalise() {
 
   const escopo = escopoAnalise();
   const invertido = anFiltro.de && anFiltro.ate && anFiltro.de > anFiltro.ate;
-  $('anResumoFiltro').innerHTML = !historico.length
+  $('anResumoFiltro').innerHTML = !historicoAprovado().length
     ? 'Nenhum ensaio guardado ainda. Assim que você salvar o primeiro, ele aparece aqui.'
     : invertido
       ? '<b>A data inicial está depois da final</b> — por isso não sobrou ensaio nenhum. '
         + 'Troque uma das duas.'
-      : `${escopo.length} de ${historico.length} ensaio(s) guardado(s) entram neste recorte, `
+      : `${escopo.length} de ${historicoAprovado().length} ensaio(s) guardado(s) entram neste recorte, `
         + `considerando <b>${textoDoIntervalo()}</b>. Tocar num dia do calendário traz `
         + 'esse dia para as datas acima.';
   montarPdfLote(escopo);
@@ -14404,7 +14421,7 @@ function aplicarModo() {
  * cheia de ensaios de solo aparecendo antes de o tipo ser escolhido dizia que
  * havia trabalho começado onde não havia.
  */
-const ABAS_SEM_RODAPE = ['dados', 'ensaio', 'historico', 'analise', 'equipamentos'];
+const ABAS_SEM_RODAPE = ['dados', 'ensaio', 'historico', 'aprovar', 'analise', 'equipamentos'];
 
 function irParaAba(chave) {
   if (typeof FOLHAS_SO !== 'undefined' && FOLHAS_SO) FOLHAS_SO = null;   // o PDF de uma aba só vale para aquela impressão
@@ -14414,6 +14431,7 @@ function irParaAba(chave) {
     .forEach(bt => bt.scrollIntoView({ inline: 'center', block: 'nearest' }));
   // a análise lê o histórico: refaz ao entrar, senão mostra o de antes do último salvamento
   if (chave === 'analise' && typeof montarAnalise === 'function') montarAnalise();
+  if (chave === 'aprovar' && typeof montarAprovacao === 'function') montarAprovacao();
   document.querySelectorAll('nav button[data-aba]').forEach(b =>
     b.classList.toggle('ativo', b.dataset.aba === chave));
   document.querySelectorAll('section.aba').forEach(s =>
@@ -17697,6 +17715,10 @@ function salvarEnsaio() {
     aparelho: nuvem.aparelho,
     foto,
     resumo,
+    // salvo = em andamento com quem lançou; só vai ao Histórico depois de aprovado (app-aprovacao.js).
+    // Nas suítes de teste antigas (navegador automatizado) o salvar aprova direto; a da aprovação
+    // (val78) liga window.__comAprovacao para exercitar o fluxo de verdade.
+    situacao: (navigator.webdriver && !window.__comAprovacao) ? 'aprovado' : 'andamento',
   };
 
   // mesma família + mesmo registro + mesma estaca = regravação, não duplicata
@@ -17709,23 +17731,29 @@ function salvarEnsaio() {
   let msg;
   if (igual >= 0) {
     registro.id = historico[igual].id;
+    // o recado de devolução continua à vista até o laboratorista reenviar
+    if (historico[igual].devolucao) registro.devolucao = historico[igual].devolucao;
+    if (historico[igual].situacao === 'devolvido') registro.situacao = 'devolvido';
     historico[igual] = registro;
-    msg = `Ensaio <b>${registro.resumo.registro} · ${registro.resumo.estaca}</b> regravado no histórico.`;
+    msg = `Ensaio <b>${registro.resumo.registro} · ${registro.resumo.estaca}</b> regravado.`;
   } else {
     historico.unshift(registro);
-    msg = `Ensaio <b>${registro.resumo.registro} · ${registro.resumo.estaca}</b> salvo no histórico.`;
+    msg = `Ensaio <b>${registro.resumo.registro} · ${registro.resumo.estaca}</b> salvo.`;
   }
 
   gravarHistorico();
   // depois de salvar, a lista onde o ensaio caiu abre sozinha
   abrirListaDoEnsaio(registro.resumo.familia);
   montarHistorico();
+  const faltas = faltasDoEnsaio(registro);
   $('salvoAviso').innerHTML = `<div class="aviso ok"><span class="ico">✓</span><span>${msg} `
-    + `Ele está na aba <b>Histórico</b>.`
+    + `Ele está <b>em andamento</b> na aba <b>Aprovar</b>; vai para o Histórico depois que o analista aprovar.`
+    + (faltas.length ? ` Ainda falta: ${faltas.join('; ')}.` : '')
     + (nuvem.url && nuvem.automatico ? ' Enviando para a planilha do Drive…' : '')
-    + `</span></div>`;
+    + `</span></div>`
+    + (faltas.length ? '' : `<button class="btn sm" type="button" data-enviar-aprov="${registro.id}" style="margin-top:8px">Enviar para aprovação</button>`);
   sincronizarAoSalvar();
-  setTimeout(() => { const e = $('salvoAviso'); if (e) e.innerHTML = ''; }, 6000);
+  if (faltas.length) setTimeout(() => { const e = $('salvoAviso'); if (e) e.innerHTML = ''; }, 9000);
 }
 
 /**
@@ -17848,12 +17876,15 @@ const LISTAS_HISTORICO = [
 ];
 
 function montarHistorico() {
-  $('histQtd').textContent = historico.length
-    ? `${historico.length} ${historico.length === 1 ? 'ensaio' : 'ensaios'}` : 'vazio';
+  const aprovados = historicoAprovado();
+  $('histQtd').textContent = aprovados.length
+    ? `${aprovados.length} ${aprovados.length === 1 ? 'ensaio aprovado' : 'ensaios aprovados'}` : 'vazio';
+  const fora = historico.length - aprovados.length, fa = $('histForaAprov');
+  if (fa) fa.innerHTML = fora ? `<div class="aviso agenda"><span class="ico">◷</span><span>${fora} ensaio(s) em andamento ou aguardando aprovação — estão na aba <b>Aprovar</b>.</span></div>` : '';
 
   // ensaios salvos antes das famílias existirem são de solos
   const porFamilia = {};
-  historico.forEach(e => {
+  aprovados.forEach(e => {
     const f = e.resumo.familia || 'solos';
     (porFamilia[f] = porFamilia[f] || []).push(e);
   });
@@ -17889,6 +17920,7 @@ function montarHistorico() {
   }).join('');
 
   ligarBotoesDoHistorico();
+  if (typeof montarAprovacao === 'function') montarAprovacao();
   try { montarPainelRomper(); }
   catch (e) { $('painelRomper').classList.add('escondido-agenda'); }
 }
@@ -17980,6 +18012,7 @@ function cartoesDoHistorico(lista) {
           <span class="selo claro">${r.folhas} ${r.folhas === 1 ? 'folha' : 'folhas'}</span>
           <span class="selo claro">${dataCurta(r.data)}</span>
           ${seloDePendencia(r)}
+          ${e.aprovadoPor ? `<span class="selo claro">✓ ${e.aprovadoPor}</span>` : ''}
         </div>
       </div>
       <div class="numeros">
@@ -18089,7 +18122,177 @@ function semearHistorico() {
   historico = gravado && gravado.length ? gravado : [];
   proximoId = historico.length + 1;
   montarHistorico();
-}/* ============================================================
+}
+/* ============================================================
+   APROVAÇÃO — o laboratorista lança, o analista aprova
+   O ensaio salvo fica "em andamento" com quem lançou (o Proctor sai num
+   dia, o ISC só no 5º). Completo, o laboratorista envia para aprovação; o
+   analista lê, confere se falta algo e aprova — ou devolve com um recado.
+   Só o aprovado entra no Histórico, na Análise e nas abas de resumo da
+   planilha. A situação viaja com o ensaio na sincronização, então o
+   analista recebe no celular dele o que o laboratorista enviou no dele.
+   ============================================================ */
+
+const SITUACOES = { andamento: 'Em andamento', aguardando: 'Aguardando aprovação', aprovado: 'Aprovado', devolvido: 'Devolvido' };
+/* ensaio salvo antes de existir a aprovação já era histórico: vale como aprovado */
+const situacaoDe = e => (e && e.situacao) || 'aprovado';
+const historicoAprovado = () => historico.filter(e => situacaoDe(e) === 'aprovado');
+const CAMPOS_APROVACAO = ['situacao', 'enviadoEm', 'enviadoPor', 'aprovadoEm', 'aprovadoPor', 'devolucao'];
+
+/* ---------- quem é o analista neste aparelho ---------- */
+const chaveAnalista = () => ESPACO_ARMAZEM + '.analista';
+function analistaAtivo() {
+  try { return JSON.parse(localStorage.getItem(chaveAnalista()) || 'null'); } catch (e) { return null; }
+}
+
+/** A senha mora nas Propriedades do script da planilha (SENHA_ANALISTA): confere lá. */
+async function entrarComoAnalista(nome, senha) {
+  if (!String(nome || '').trim()) throw new Error('Escreva o seu nome — ele vai na aprovação de cada ensaio.');
+  if (!nuvem.url) throw new Error('Ligue o app à planilha do Drive (Histórico → Sincronização). É ela que confere a senha do analista.');
+  const r = await chamarNuvem({ acao: 'analista', senha: String(senha || '') }, 20000);
+  if (r && r.configurada === false) throw new Error('A planilha ainda não tem senha de analista. No Apps Script: Configurações do projeto → Propriedades do script → SENHA_ANALISTA.');
+  if (!r || !r.analista) throw new Error('Senha de analista incorreta.');
+  try { localStorage.setItem(chaveAnalista(), JSON.stringify({ nome: String(nome).trim().toUpperCase(), desde: new Date().toISOString() })); }
+  catch (e) { throw new Error('Não consegui guardar neste aparelho (janela anônima?).'); }
+}
+function sairDoAnalista() { try { localStorage.removeItem(chaveAnalista()); } catch (e) {} }
+
+/* ---------- o que falta num ensaio ---------- */
+function faltasDoEnsaio(e) {
+  const r = e.resumo || {}, faltas = [];
+  faltaIdentificar(r).forEach(f => faltas.push(`Falta ${f}`));
+  (r.pendencias || []).forEach(p => faltas.push(`Pendente: ${p.rotulo || p.tipo || 'leitura'}${p.data ? ' (' + dataCurta(p.data) + ')' : ''}`));
+  return faltas;
+}
+
+/* ---------- mudanças de situação ---------- */
+function mudarSituacao(e, campos) {
+  Object.assign(e, campos, { atualizadoEm: new Date().toISOString() });
+  gravarHistorico();
+  montarAprovacao(); montarHistorico();
+  if (typeof sincronizarAoSalvar === 'function') sincronizarAoSalvar();
+}
+
+function enviarParaAprovacao(id) {
+  const e = historico.find(x => x.id === id); if (!e) return false;
+  const f = faltasDoEnsaio(e);
+  if (f.length) { avisoAprovacao('erro', `Ainda não dá para enviar <b>${atr(e.resumo.registro || '')}</b>: ${f.map(atr).join('; ')}.`); return false; }
+  mudarSituacao(e, { situacao: 'aguardando', enviadoEm: new Date().toISOString(), enviadoPor: nuvem.aparelho || '', devolucao: null });
+  avisoAprovacao('ok', `Ensaio <b>${atr(e.resumo.registro || '')}</b> enviado para o analista aprovar.`);
+  return true;
+}
+
+function aprovarEnsaio(id) {
+  const a = analistaAtivo(); if (!a) { avisoAprovacao('erro', 'Só o analista aprova. Entre com a senha de analista acima.'); return false; }
+  const e = historico.find(x => x.id === id); if (!e) return false;
+  const f = faltasDoEnsaio(e);
+  if (f.length) { avisoAprovacao('erro', `Não dá para aprovar: ${f.map(atr).join('; ')}. Devolva ao laboratorista.`); return false; }
+  mudarSituacao(e, { situacao: 'aprovado', aprovadoEm: new Date().toISOString(), aprovadoPor: a.nome });
+  avisoAprovacao('ok', `Ensaio <b>${atr(e.resumo.registro || '')}</b> aprovado — já está no Histórico.`);
+  return true;
+}
+
+function devolverEnsaio(id, nota) {
+  const a = analistaAtivo(); if (!a) { avisoAprovacao('erro', 'Só o analista devolve. Entre com a senha de analista acima.'); return false; }
+  if (!String(nota || '').trim()) { avisoAprovacao('erro', 'Escreva o que falta ou o que corrigir — o laboratorista vai ler.'); return false; }
+  const e = historico.find(x => x.id === id); if (!e) return false;
+  mudarSituacao(e, { situacao: 'devolvido', devolucao: { nota: String(nota).trim(), por: a.nome, em: new Date().toISOString() } });
+  avisoAprovacao('ok', `Ensaio <b>${atr(e.resumo.registro || '')}</b> devolvido ao laboratorista.`);
+  return true;
+}
+
+/* ---------- tela ---------- */
+let devolvendo = null;
+function avisoAprovacao(tipo, html) {
+  const el = $('aprovAviso'); if (!el) return;
+  el.innerHTML = `<div class="aviso ${tipo === 'erro' ? 'erro' : 'ok'}"><span class="ico">${tipo === 'erro' ? '✕' : '✓'}</span><span>${html}</span></div>`;
+}
+
+function cartaoAprovacao(e, analista) {
+  const r = e.resumo || {}, M = MODOS[r.modo], s = situacaoDe(e), faltas = faltasDoEnsaio(e);
+  const quando = iso => iso ? instanteTexto(iso) : '';
+  const linhaInfo = s === 'aguardando'
+    ? `Enviado ${quando(e.enviadoEm)}${e.enviadoPor ? ' · ' + atr(e.enviadoPor) : ''}`
+    : `Salvo ${quando(e.atualizadoEm || e.salvoEm)}${e.aparelho ? ' · ' + atr(e.aparelho) : ''}`;
+  const dev = s === 'devolvido' && e.devolucao
+    ? `<div class="aviso erro"><span class="ico">↩</span><span><b>Devolvido por ${atr(e.devolucao.por || 'analista')}:</b> ${atr(e.devolucao.nota)}</span></div>` : '';
+  const listaFaltas = faltas.length
+    ? `<ul class="faltas">${faltas.map(f => `<li>${atr(f)}</li>`).join('')}</ul>`
+    : `<p class="hint ok-completo">✓ Completo — nada pendente.</p>`;
+  let botoes = `<button class="btn ghost sm" type="button" data-aprov-abrir="${e.id}">${s === 'aguardando' ? 'Abrir' : 'Continuar'}</button>
+    <button class="btn ghost sm" type="button" data-aprov-pdf="${e.id}">Ver PDF</button>`;
+  if (s === 'aguardando') {
+    if (analista) {
+      botoes += `<button class="btn sm" type="button" data-aprovar="${e.id}"${faltas.length ? ' disabled' : ''}>Aprovar</button>
+        <button class="btn ghost sm perigo" type="button" data-devolver="${e.id}">Devolver</button>`;
+      if (devolvendo === e.id) botoes += `<div class="devolver-caixa"><label>O que falta ou o que corrigir</label>
+        <textarea id="notaDevolver" rows="2" placeholder="Ex.: conferir a leitura do ponto 3 do ISC"></textarea>
+        <div class="rasc-botoes"><button class="btn sm perigo" type="button" data-devolver-ok="${e.id}">Devolver ao laboratorista</button>
+        <button class="btn ghost sm" type="button" data-devolver-nao="1">Cancelar</button></div></div>`;
+    } else botoes += `<span class="hint">Só o analista aprova.</span>`;
+  } else {
+    botoes += `<button class="btn sm" type="button" data-enviar-aprov="${e.id}"${faltas.length ? ' disabled' : ''}>Enviar para aprovação</button>`;
+  }
+  return `<div class="ensaio-salvo aprov-${s}">
+    <div class="cabeca"><div class="quem"><b>${atr(r.registro || '—')} · ${atr(r.estaca || '—')}</b>
+      <span>${atr(r.obra || '—')} · ${linhaInfo}</span></div>
+      <div class="marcas"><span class="selo">${M ? M.nome : atr(r.modo || '')}</span><span class="selo claro">${SITUACOES[s]}</span>${seloDePendencia(r)}</div></div>
+    ${dev}${listaFaltas}
+    <div class="acoes">${botoes}</div></div>`;
+}
+
+function montarAprovacao() {
+  const alvo = $('aprovarConteudo');
+  const aguardando = historico.filter(e => situacaoDe(e) === 'aguardando');
+  const andamento = historico.filter(e => ['andamento', 'devolvido'].includes(situacaoDe(e)));
+  // contagem na barra: o que espera aprovação
+  document.querySelectorAll('nav button[data-aba="aprovar"] .conta-aprov').forEach(c => {
+    c.textContent = aguardando.length ? String(aguardando.length) : ''; c.hidden = !aguardando.length; });
+  if (!alvo) return;
+  const a = analistaAtivo();
+  alvo.innerHTML = `
+    <div class="card">
+      <h2>Ensaios para aprovar <span class="tag">${aguardando.length} aguardando · ${andamento.length} em andamento</span></h2>
+      <p class="hint" style="margin:0 0 12px">O laboratorista salva o ensaio quantas vezes precisar (o Proctor num dia, o ISC no 5º).
+        Completo, toca em <b>Enviar para aprovação</b>. O analista confere e aprova — só então o ensaio vai para o <b>Histórico</b>.</p>
+      ${a ? `<div class="aviso ok"><span class="ico">✓</span><span>Este aparelho está no modo <b>analista</b> (${atr(a.nome)}).</span></div>
+             <button class="btn ghost sm" type="button" id="btnSairAnalista">Sair do modo analista</button>`
+        : `<details class="analista-entrar"><summary class="hint" style="cursor:pointer"><b>Sou o analista</b> — entrar para aprovar</summary>
+            <div class="grid4" style="margin-top:10px"><div><label>Seu nome</label><input type="text" id="analistaNome" class="caixa-alta" autocomplete="off"></div>
+            <div><label>Senha de analista</label><input type="password" id="analistaSenha" autocomplete="off"></div></div>
+            <button class="btn sm" type="button" id="btnEntrarAnalista" style="margin-top:10px">Entrar</button></details>`}
+      <div id="aprovAviso" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h2>Aguardando aprovação <span class="tag">${aguardando.length}</span></h2>
+      ${aguardando.length ? aguardando.map(e => cartaoAprovacao(e, a)).join('') : '<p class="hint">Nenhum ensaio esperando aprovação.</p>'}
+    </div>
+    <div class="card">
+      <h2>Em andamento <span class="tag">${andamento.length}</span></h2>
+      <p class="hint" style="margin:0 0 12px">Salvos e ainda não enviados — incompletos (ex.: ISC por romper) ou devolvidos pelo analista.</p>
+      ${andamento.length ? andamento.map(e => cartaoAprovacao(e, a)).join('') : '<p class="hint">Nada em andamento.</p>'}
+    </div>`;
+}
+
+/* um ouvinte só, no documento: os cartões são refeitos a cada mudança */
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('button'); if (!t) return;
+  const d = t.dataset;
+  if (d.enviarAprov) { enviarParaAprovacao(d.enviarAprov); const s = $('salvoAviso'); if (s && s.contains(t)) s.innerHTML = ''; return; }
+  if (d.aprovar) return void aprovarEnsaio(d.aprovar);
+  if (d.devolver) { devolvendo = d.devolver; montarAprovacao(); const n = $('notaDevolver'); if (n) n.focus(); return; }
+  if (d.devolverNao) { devolvendo = null; montarAprovacao(); return; }
+  if (d.devolverOk) { const nota = ($('notaDevolver') || {}).value; if (devolverEnsaio(d.devolverOk, nota)) devolvendo = null; montarAprovacao(); return; }
+  if (d.aprovAbrir) return void editarEnsaio(d.aprovAbrir);
+  if (d.aprovPdf) return void exportarEnsaio(d.aprovPdf);
+  if (t.id === 'btnSairAnalista') { sairDoAnalista(); montarAprovacao(); return; }
+  if (t.id === 'btnEntrarAnalista') {
+    t.disabled = true;
+    try { await entrarComoAnalista($('analistaNome').value, $('analistaSenha').value); montarAprovacao(); avisoAprovacao('ok', 'Modo analista ligado neste aparelho.'); }
+    catch (e) { avisoAprovacao('erro', e.message); t.disabled = false; }
+  }
+});
+/* ============================================================
    ENVIAR O RELATÓRIO PELO WHATSAPP
    Monta o PDF das folhas dentro do próprio app e abre o menu de
    compartilhar do celular — de onde se escolhe o WhatsApp (ou um
@@ -18491,7 +18694,9 @@ function paraNuvem(e) {
     excluido: !!e.excluido,
     // ensaios salvos antes ainda trazem o cálculo da tela dentro: sai enxuto
     foto: { foto: e.foto ? { ...e.foto, estado: semCalculoDeTela(e.foto.estado) } : e.foto,
-            resumo: r, pendencias: r.pendencias || [] },
+            resumo: r, pendencias: r.pendencias || [],
+            // aprovação viaja junto: o analista recebe o que o laboratorista enviou
+            ...Object.fromEntries(CAMPOS_APROVACAO.filter(k => e[k] !== undefined).map(k => [k, e[k]])) },
   };
 }
 
@@ -18505,6 +18710,7 @@ function daNuvem(x) {
     atualizadoEm: x.atualizadoEm,
     aparelho: x.aparelho,
     foto: embrulho.foto || null,
+    ...Object.fromEntries(CAMPOS_APROVACAO.filter(k => embrulho[k] !== undefined).map(k => [k, embrulho[k]])),
     resumo: embrulho.resumo || {
       familia: x.familia, modo: x.modo, registro: x.registro, estaca: x.estaca,
       obra: x.obra, rodovia: x.rodovia, material: x.material, data: x.data,
@@ -18660,6 +18866,7 @@ function mesclarDaNuvem(vindos) {
     if (dele > meu) {
       Object.assign(local, { foto: v.foto, resumo: v.resumo,
                              atualizadoEm: v.atualizadoEm, aparelho: v.aparelho });
+      CAMPOS_APROVACAO.forEach(k => { local[k] = v[k]; });
       atualizados++;
     }
   });
