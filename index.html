@@ -1327,7 +1327,7 @@ summary:hover{color:var(--text);}
     </p>
   </div>
 
-  <div class="card" data-bloco="solos">
+  <div class="card nao-csond" data-bloco="solos">
     <h2>Empresas e equipe <span class="tag">Assinam as folhas</span></h2>
     <div class="grid4" id="gpEquipe"></div>
   </div>
@@ -1476,6 +1476,19 @@ summary:hover{color:var(--text);}
           </table>
         </div>
         <button class="btn ghost sm" type="button" data-eqadd="pis">+ PI</button>
+        <div class="card rasc-card" style="margin-top:14px">
+          <h2>Importar PIs <span class="tag">planilha, PDF ou foto</span></h2>
+          <p class="hint">Traga a tabela de PIs da obra (a aba CAPA da planilha). PI que já existe é atualizado; os novos entram no fim.</p>
+          <div class="rasc-botoes">
+            <label class="btn"><input type="file" id="arqPis" accept=".xlsx,.xls,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>Planilha (.xlsx / .csv)</label>
+            <label class="btn ghost"><input type="file" accept="image/*,application/pdf" multiple data-rascfoto="pis" hidden>PDF ou foto</label>
+            <label class="btn ghost"><input type="file" accept="image/*" capture="environment" data-rascfoto="pis" hidden>📷 Fotografar</label>
+            <button class="btn ghost" type="button" data-rascficha="pis">Imprimir ficha em branco</button>
+          </div>
+          <p class="hint">PDF e foto são lidos pela IA (precisa do app ligado à planilha do Drive) e passam pela tela de conferência. A planilha é lida aqui mesmo, sem internet.</p>
+          <div id="avisoImportarPis"></div>
+          <div id="rascAviso-pis"></div>
+        </div>
         <details style="margin-top:12px"><summary class="hint" style="cursor:pointer"><b>Colar da planilha</b> (aba CAPA)</summary>
           <p class="hint">Na planilha, selecione as linhas da tabela de PIs (colunas PI, Rodovia, Pista, Sentido, km, Latitude, Longitude), copie e cole aqui. PI que já existe é atualizado.</p>
           <textarea id="txtColarPis" rows="5" style="width:100%" placeholder="1&#9;BR-101/ES&#9;NORTE&#9;&#9;50,760&#9;-18,592181&#9;-39,890406"></textarea>
@@ -5795,6 +5808,133 @@ function ligarColarPis() {
   });
 }
 
+/* ------------------------------------------------------------
+   Importar PIs de uma planilha (.xlsx ou .csv), sem biblioteca:
+   o .xlsx é um zip de XMLs — o navegador descompacta (DecompressionStream)
+   e o app procura a tabela pelo cabeçalho (PI · km · Latitude…), de
+   preferência na aba CAPA.
+   ------------------------------------------------------------ */
+
+async function lerZip(buf) {
+  const dv = new DataView(buf), td = new TextDecoder();
+  let e = buf.byteLength - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('O arquivo não é um .xlsx válido.');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const arqs = {};
+  for (let i = 0; i < n; i++) {
+    const metodo = dv.getUint16(p + 10, true), tam = dv.getUint32(p + 20, true);
+    const ln = dv.getUint16(p + 28, true), le = dv.getUint16(p + 30, true), lc = dv.getUint16(p + 32, true);
+    const off = dv.getUint32(p + 42, true);
+    arqs[td.decode(new Uint8Array(buf, p + 46, ln))] = { metodo, tam, off };
+    p += 46 + ln + le + lc;
+  }
+  const ler = async nome => {
+    const f = arqs[nome]; if (!f) return null;
+    const ini = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+    const dados = new Uint8Array(buf, ini, f.tam);
+    if (f.metodo === 0) return td.decode(dados);
+    return await new Response(new Blob([dados]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  };
+  return { arqs, ler };
+}
+
+/** Todas as abas do .xlsx como [{ nome, linhas: [[valor…]…] }], a aba CAPA primeiro. */
+async function lerXlsx(buf) {
+  const z = await lerZip(buf), xml = t => new DOMParser().parseFromString(t || '<x/>', 'application/xml');
+  const ss = xml(await z.ler('xl/sharedStrings.xml'));
+  const compart = [...ss.getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join(''));
+  const wb = xml(await z.ler('xl/workbook.xml')), rels = xml(await z.ler('xl/_rels/workbook.xml.rels'));
+  const alvo = {}; [...rels.getElementsByTagName('Relationship')].forEach(r => { alvo[r.getAttribute('Id')] = r.getAttribute('Target'); });
+  const abas = [...wb.getElementsByTagName('sheet')].map(s => {
+    let t = alvo[s.getAttribute('r:id')] || ''; t = t.replace(/^\//, ''); if (!t.startsWith('xl/')) t = 'xl/' + t;
+    return { nome: s.getAttribute('name') || '', arq: t };
+  });
+  abas.sort((a, b) => (/^capa$/i.test(b.nome.trim()) ? 1 : 0) - (/^capa$/i.test(a.nome.trim()) ? 1 : 0));
+  const col = ref => { let n = 0; for (const ch of String(ref).replace(/\d+/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  const saida = [];
+  for (const a of abas) {
+    const sh = xml(await z.ler(a.arq)), linhas = [];
+    [...sh.getElementsByTagName('row')].forEach(r => {
+      const lin = [];
+      [...r.getElementsByTagName('c')].forEach(c => {
+        const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0];
+        let val = null;
+        if (t === 's') val = v ? compart[+v.textContent] : null;
+        else if (t === 'inlineStr') val = [...c.getElementsByTagName('t')].map(x => x.textContent).join('');
+        else if (v) val = t === 'str' || t === 'b' || t === 'e' ? v.textContent : parseFloat(v.textContent);
+        if (val !== null && val !== '') lin[col(c.getAttribute('r'))] = val;
+      });
+      linhas[(+r.getAttribute('r') || linhas.length + 1) - 1] = lin;
+    });
+    saida.push({ nome: a.nome, linhas });
+  }
+  return saida;
+}
+
+/** Acha a tabela de PIs numa grade de células: a linha de cabeçalho com PI, km e latitude. */
+function pisDaGrade(linhas) {
+  const norm = v => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const num = v => { if (typeof v === 'number') return v; const t = String(v ?? '').trim().replace(/\s/g, ''); if (!t) return null;
+    const n = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t); return Number.isFinite(n) ? n : null; };
+  for (let i = 0; i < linhas.length; i++) {
+    const cab = Array.from(linhas[i] || [], norm);   // Array.from: célula vazia vira '' (map pula buraco)
+    const ach = f => cab.findIndex(f);
+    const cPi = ach(c => c === 'PI' || c === 'PI N' || c === 'PI NO' || c === 'Nº PI' || c === 'N PI' || /^PI\b/.test(c));
+    const cKm = ach(c => c === 'KM' || /^KM\b/.test(c)), cLat = ach(c => c.startsWith('LAT'));
+    if (cPi < 0 || (cKm < 0 && cLat < 0)) continue;
+    const cRod = ach(c => c.includes('RODOVIA')), cPis = ach(c => c.startsWith('PISTA')), cSen = ach(c => c.startsWith('SENTIDO')),
+      cLon = ach(c => c.startsWith('LON'));
+    const pis = [];
+    for (let j = i + 1; j < linhas.length; j++) {
+      const l = linhas[j] || [], pi = l[cPi];
+      if (pi === undefined || pi === null || String(pi).trim() === '') { if (pis.length) break; else continue; }
+      const t = k => k >= 0 && l[k] !== undefined ? String(l[k]).toUpperCase().trim() : '';
+      pis.push({ numero: String(typeof pi === 'number' ? +pi.toFixed(6) : pi).trim(), rodovia: t(cRod), pista: t(cPis), sentido: t(cSen),
+        km: cKm >= 0 ? num(l[cKm]) : null, latitude: cLat >= 0 ? num(l[cLat]) : null, longitude: cLon >= 0 ? num(l[cLon]) : null });
+    }
+    if (pis.length) return pis;
+  }
+  return [];
+}
+
+async function importarPisArquivo(arq) {
+  const nome = arq.name.toLowerCase();
+  if (/\.xls$/.test(nome)) throw new Error('Arquivo .xls (Excel antigo): abra no Excel e use Salvar como → .xlsx, ou leia o PDF/foto da tabela.');
+  let pis = [];
+  if (/\.(csv|txt)$/.test(nome)) {
+    const txt = await arq.text(), sep = txt.includes('\t') ? '\t' : (txt.split('\n')[0].includes(';') ? ';' : ',');
+    pis = pisDaGrade(txt.split(/\r?\n/).map(l => l.split(sep)));
+  } else {
+    const abas = await lerXlsx(await arq.arrayBuffer());
+    for (const a of abas) { pis = pisDaGrade(a.linhas); if (pis.length) break; }
+  }
+  if (!pis.length) throw new Error('Não achei a tabela de PIs. A planilha precisa de um cabeçalho com PI, km e Latitude (como a aba CAPA).');
+  const lista = listaPis();
+  pis.forEach(n => { const i = lista.findIndex(p => chaveMolde(p.numero) === chaveMolde(n.numero)); if (i >= 0) lista[i] = n; else lista.push(n); });
+  return pis.length;
+}
+
+function ligarImportarPis() {
+  const el = $('arqPis');
+  if (!el || el.dataset.ligado) return;
+  el.dataset.ligado = '1';
+  el.addEventListener('change', async () => {
+    const arq = el.files && el.files[0]; el.value = '';
+    if (!arq) return;
+    const aviso = $('avisoImportarPis');
+    try {
+      const n = await importarPisArquivo(arq);
+      gruposAbertos.add('pis');
+      montarEquipamentos(); marcarCadastroAlterado(); atualizar();
+      if (typeof montarCsond === 'function') montarCsond();
+      aviso.innerHTML = `<div class="aviso ok"><span class="ico">✓</span><span>${n} PI(s) lido(s) de ${atr(arq.name)}. Confira e toque em <b>Salvar cadastro</b>.</span></div>`;
+    } catch (e) {
+      aviso.innerHTML = `<div class="aviso erro"><span class="ico">✕</span><span>${e.message}</span></div>`;
+    }
+  });
+}
+
 /* ============================================================
    CAUQ — CONCRETO ASFÁLTICO USINADO A QUENTE
    Estado, telas e encadeamento de cálculo. A matemática mora em
@@ -9972,7 +10112,22 @@ FICHAS_CS.forEach(f => { f.modo = 'csond'; });
 const CAB_CS = [['Registro', 'registro', 'medicao.registro', 'texto'], ['Furo / PI', 'furo', 'medicao.furo', 'texto'],
   ['Data', 'data', 'medicao.dataEnsaio', 'data'], ['Laboratorista', 'laboratorista', 'medicao.laboratorista', 'texto']];
 const CAB_TODOS = ['registro', 'furo', 'data', 'laboratorista'];
-const todasFichas = () => [...FICHAS_CS, ...(typeof FICHAS_OUTRAS !== 'undefined' ? FICHAS_OUTRAS : [])];
+/* Cadastro de PIs (Dados gerais): lê a tabela de PIs de um PDF, foto ou da ficha impressa.
+   Não pertence a um ensaio (modo 'cadastro'): não entra no jogo de fichas da sondagem. */
+const CAMPOS_PI = ['numero', 'rodovia', 'pista', 'sentido', 'km', 'latitude', 'longitude'];
+const LINHAS_PI = 25;
+const FICHA_PIS = { aba: 'pis', modo: 'cadastro', codigo: PF_CS + '-P1', titulo: 'Cadastro de pontos de sondagem (PI)',
+  cabs: [], parcial: true, cab: [],
+  nota: `A tabela pode ter outro desenho (por exemplo a aba CAPA da planilha da obra, com título, cores e colunas como "Sentido Tráfego").
+Leia cada PI da tabela na ordem em que aparece: o 1º PI vai na linha 1 (pi.0.*), o 2º na linha 2 (pi.1.*) e assim por diante, até ${LINHAS_PI}.
+"PI" é o número do ponto como escrito. Pista e sentido em texto ("Norte", "Sul", "LD"). km, latitude e longitude são números (-18,592181 → -18.592181). Célula vazia: deixe fora.`,
+  blocos: [{ tipo: 'grade', titulo: 'Pontos de sondagem', colunas: ['PI', 'Rodovia', 'Pista', 'Sentido', 'km', 'Latitude', 'Longitude'],
+    idx: [0, 1, 2, 3, 4, 5, 6], tipos: ['texto', 'texto', 'texto', 'texto', 'num', 'num', 'num'],
+    linhas: Array.from({ length: LINHAS_PI }, (_, k) => [String(k + 1), c => `pi.${k}.${CAMPOS_PI[c]}`, 'num']) }] };
+/* o que a leitura trouxe, por linha — vira cadastro (pelo nº do PI) só ao Aplicar */
+let PIS_LIDOS = {};
+
+const todasFichas = () => [...FICHAS_CS, ...(typeof FICHAS_OUTRAS !== 'undefined' ? FICHAS_OUTRAS : []), FICHA_PIS];
 const _val = v => typeof v === 'function' ? v() : v;
 /** A ficha com títulos e colunas que dependem do ensaio (nomes dos agregados, graduação) já resolvidos. */
 function resolverFicha(f) {
@@ -10128,7 +10283,7 @@ ${cs ? `Ignore valores calculados (água, solo seco, umidade, densidade, pressã
 Na folha impressa da planilha, a penetração do ISC vem em pares LEIT./PRESS. para 5 pontos: leia a coluna LEIT. dos pontos 2, 3 e 4.`
   : 'Ignore valores calculados (teor, densidades, vazios, resistências, médias) e todo quadro, linha ou coluna cinza/tracejado marcado CONTA: leia só o que está listado acima.'}
 
-Responda só com este JSON:
+${f.nota ? f.nota + '\n\n' : ''}Responda só com este JSON:
 {"ficha": "código lido no topo ou null",
  "cabecalho": {${cabDaFicha(f).map(c => `"${c[1]}": ${c[3] === 'data' ? '"AAAA-MM-DD"' : '"..."'}`).join(', ')}},
  "valores": {"<caminho>": valor, ...},
@@ -10237,9 +10392,12 @@ function prensaDaFicha(criar) {
   if (!p && criar) { p = { numero: String(n), nome: 'PRENSA ' + n, k: null }; cfg.prensas.push(p); estado.csond.isc.prensa = p.numero; }
   return p || null;
 }
-const lerCampoCs = c => c === 'isc.constantePrensa' ? ((prensaDaFicha(false) || {}).k ?? null)
+const lerCampoCs = c => c.startsWith('pi.') ? (() => { const [, k, campo] = c.split('.');
+    const p = (typeof listaPis === 'function' ? listaPis() : [])[+k]; return p && p[campo] !== undefined && p[campo] !== '' ? p[campo] : null; })()
+  : c === 'isc.constantePrensa' ? ((prensaDaFicha(false) || {}).k ?? null)
   : c.startsWith('medicao.') ? estado.medicao[c.slice(8)] : lerCs(c);
 function gravarCampoCs(c, v) {
+  if (c.startsWith('pi.')) { const [, k, campo] = c.split('.'); (PIS_LIDOS[k] = PIS_LIDOS[k] || {})[campo] = v; return; }
   if (c === 'ident.energia' && v) {
     // escrito à mão: "I", "INTERMEDIÁRIA", "Interm." — vira a opção do app
     const t = String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
@@ -10356,6 +10514,7 @@ function fecharConferencia() { const e = $('rascConferencia'); if (e) e.remove()
 
 function aplicarConferencia() {
   if (!CONFERENCIA) return;
+  PIS_LIDOS = {};
   const caixa = $('rascConferencia');
   let n = 0;
   CONFERENCIA.linhas.forEach((l, i) => {
@@ -10365,8 +10524,15 @@ function aplicarConferencia() {
     if (l.sel) LIDOS_TELA.add(l.sel); else CAMPOS_LIDOS_IA.add(l.caminho);
     n++;
   });
-  const aba = CONFERENCIA.chave, cs = CONFERENCIA.f.modo === 'csond';
+  const aba = CONFERENCIA.chave, cs = CONFERENCIA.f.modo === 'csond', ehPis = CONFERENCIA.f.aba === 'pis';
+  if (ehPis) n = juntarPisLidos();
   fecharConferencia();
+  if (ehPis) {
+    atualizar();
+    avisoRasc(aba, `<div class="aviso ok"><span class="ico">✓</span><span>${n} PI(s) lido(s) e cadastrado(s). Confira a tabela e toque em
+      <b>Salvar cadastro</b> (lá embaixo) para guardar neste aparelho.</span></div>`);
+    return;
+  }
   if (cs) montarCsond();
   if (typeof montarDados === 'function') montarDados();
   atualizar();
@@ -10491,6 +10657,28 @@ function montarBotoesPdfAba() {
 function montarRascunhoNasAbas() {
   document.querySelectorAll('[data-rascslot]').forEach(el => { el.innerHTML = cartaoRascunho(el.dataset.rascslot); });
   ligarRascunho();
+}
+
+
+/** Junta os PIs lidos (por linha) ao cadastro, pelo nº do PI: o que existe é atualizado, o novo entra. */
+function juntarPisLidos() {
+  const lista = listaPis(); let n = 0;
+  Object.keys(PIS_LIDOS).sort((a, b) => a - b).forEach(k => {
+    const l = PIS_LIDOS[k];
+    if (l.numero === null || l.numero === undefined || String(l.numero).trim() === '') return;
+    const txt = v => v === null || v === undefined ? '' : String(v).toUpperCase().trim();
+    const novo = { numero: String(l.numero).trim(), rodovia: txt(l.rodovia), pista: txt(l.pista), sentido: txt(l.sentido),
+      km: ehNumero(l.km) ? l.km : null, latitude: ehNumero(l.latitude) ? l.latitude : null, longitude: ehNumero(l.longitude) ? l.longitude : null };
+    const i = lista.findIndex(p => chaveMolde(p.numero) === chaveMolde(novo.numero));
+    if (i >= 0) Object.keys(novo).forEach(c => { if (novo[c] !== null && novo[c] !== '') lista[i][c] = novo[c]; });
+    else lista.push(novo);
+    n++;
+  });
+  PIS_LIDOS = {};
+  gruposAbertos.add('pis');
+  montarEquipamentos(); marcarCadastroAlterado();
+  if (typeof montarCsond === 'function') montarCsond();
+  return n;
 }
 /* ============================================================
    FICHAS DE RASCUNHO DOS DEMAIS ENSAIOS — CAUQ, Marshall 031,
@@ -13105,6 +13293,8 @@ const CAMPOS_MEDICAO = [
 
 /* Na Caracterização de sondagem estes já estão no cartão de identificação da 1ª aba (ficha R1). */
 const DUPLICADOS_CSOND = ['registro', 'furo', 'dataEnsaio', 'obra', 'camada', 'tipoMaterial', 'laboratorista', 'engenheiro', 'proctor'];
+/* Fora da Caracterização de sondagem (pedido de 30/10/2026): executora e supervisora não entram na folha dela. */
+const FORA_CSOND = ['executora', 'supervisora'];
 
 /**
  * A aba Dados saiu do topo: os cartões de dados da família moram na primeira aba
@@ -13129,7 +13319,7 @@ function montarDados() {
   const grupos = { periodo:'gpPeriodo', obra:'gpObra', mat:'gpMaterial', equipe:'gpEquipe', ident:'gpIdent' };
 
   Object.entries(grupos).forEach(([g, alvo]) => {
-    $(alvo).innerHTML = CAMPOS_MEDICAO.filter(c => c.g === g && !(estado.modo === 'csond' && DUPLICADOS_CSOND.includes(c.k))).map(c => {
+    $(alvo).innerHTML = CAMPOS_MEDICAO.filter(c => c.g === g && !(estado.modo === 'csond' && (DUPLICADOS_CSOND.includes(c.k) || FORA_CSOND.includes(c.k)))).map(c => {
       const val = m[c.k] ?? '';
       const campo = c.opcoes
         ? `<select data-md="${c.k}">${c.opcoes
@@ -13314,7 +13504,8 @@ function rodapeFolha(nota = '') {
 
 function atualizarDados(comp) {
   const m = estado.medicao;
-  const faltando = CAMPOS_MEDICAO.filter(c => c.obrig && !String(m[c.k] ?? '').trim());
+  const faltando = CAMPOS_MEDICAO.filter(c => c.obrig && !String(m[c.k] ?? '').trim()
+    && !(estado.modo === 'csond' && FORA_CSOND.includes(c.k)));
 
   const avisos = [];
   if (faltando.length) {
@@ -18901,7 +19092,7 @@ montarEA();
 montarPic();
 montarSed();
 montarSedCap();
-montarEquipamentos(); ligarColarPis();
+montarEquipamentos(); ligarColarPis(); ligarImportarPis();
 montarFrasco();
 montarCauq();
 montarSondagem();
