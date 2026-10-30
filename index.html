@@ -9929,7 +9929,7 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
         <div class="cod">${f.codigo}</div></header>
       <div class="idt" style="grid-template-columns:${cabDaFicha(f).map(c => c[1] === 'laboratorista' ? '1.6fr' : c[3] === 'data' ? '1.3fr' : '1fr').join(' ')}">${
         cabDaFicha(f).map(([rot, k, , tipo]) => `<div><span>${rot}</span><div class="q${tipo === 'data' && !CB(k) ? ' data' : ''}">${CB(k) || (tipo === 'data' ? '<i>dia</i>/<i>mês</i>/<i>ano</i>' : '')}</div></div>`).join('')}</div>
-      <p class="reg">Caneta preta · um valor por quadro · vírgula bem marcada (106,43) · nada fora dos quadros · erro: risque e escreva ao lado, dentro do quadro.${f.blocos.some(b => (b.contas || []).length || (b.linhas || []).some(l => !l[1]) || (b.campos || []).some(c => c[2] === 'conta')) ? '<br><b>Quadros cinza (CONTA)</b> são para a sua conta à mão — o app não lê esses valores: ele recalcula tudo a partir das pesagens.' : ''}</p>
+      <p class="reg">Caneta preta · um valor por quadro · vírgula bem marcada (106,43) · nada fora dos quadros · erro: risque e escreva ao lado, dentro do quadro.${f.blocos.some(b => (b.contas || []).length || (b.linhas || []).some(l => !l[1]) || (b.campos || []).some(c => c[2] === 'conta')) ? '<br><b>Quadros cinza e tracejados (CONTA)</b> são para a sua conta à mão — o app não lê esses valores: ele recalcula tudo a partir das pesagens.' : ''}</p>
       ${blocos}
       <footer>${f.codigo} · ${f.titulo} · fotografe a folha inteira, de frente, com boa luz</footer></section>`;
   };
@@ -9958,7 +9958,11 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   th,td{border:0.5mm solid #000;font-size:10.5pt}
   thead th{background:#e6e6e6;height:8mm} tbody th{text-align:left;padding:0 2mm;width:46mm;font-weight:700;background:#f3f3f3}
   td{height:11.5mm}
-  .conta td,td.conta,.c.conta .q{background:#e9e9e9}
+  /* CONTA: cinza que imprime mesmo com "gráficos de fundo" desligado (print-color-adjust) e borda tracejada,
+     que continua aparecendo se a impressora clarear o cinza ou imprimir em preto e branco */
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .conta td,td.conta,.c.conta .q{background:#d6d6d6}
+  .conta td,td.conta{border-style:dashed} .c.conta .q{border-style:dashed}
   tr.conta th,th.conta,.c.conta span{color:#555;font-weight:600}
   .tag-conta{font:700 6.5pt Arial;letter-spacing:.5px;text-transform:uppercase;border:0.3mm solid #777;border-radius:1mm;padding:0 0.8mm;color:#666;font-style:normal;white-space:nowrap}
   footer{margin-top:4mm;font-size:8pt;color:#444;border-top:0.3mm solid #000;padding-top:1.5mm}
@@ -9985,12 +9989,12 @@ function abrirFichasRascunho(abas) {
 
 function instrucaoRascunho(f) {
   const blocos = f.blocos.map(b => b.tipo === 'campos'
-    ? (b.campos.every(c => c[2] === 'conta') ? `• Bloco "${b.titulo}": só quadros cinza de CONTA do operador — NÃO leia.`
+    ? (b.campos.every(c => c[2] === 'conta') ? `• Bloco "${b.titulo}": só quadros cinza/tracejados de CONTA do operador — NÃO leia.`
       : `• Bloco "${b.titulo}" (quadros com rótulo em cima): ${b.campos.filter(c => c[2] !== 'conta').map(([r, c]) => `"${r}" → ${c}`).join('; ')}`
-      + (b.campos.some(c => c[2] === 'conta') ? `. NÃO leia os quadros cinza marcados CONTA: ${b.campos.filter(c => c[2] === 'conta').map(c => `"${c[0]}"`).join(', ')}.` : ''))
+      + (b.campos.some(c => c[2] === 'conta') ? `. NÃO leia os quadros cinza/tracejados marcados CONTA: ${b.campos.filter(c => c[2] === 'conta').map(c => `"${c[0]}"`).join(', ')}.` : ''))
     : `• Tabela "${b.titulo}", colunas da esquerda para a direita: ${[...b.colunas, ...(b.contas || []).map(c => c + ' (CONTA — não leia)')].join(' | ')}. Linhas (rótulo à esquerda):\n`
       + b.linhas.map(([r, fn]) => fn ? `    - "${r}": ${b.idx.map((ix, k) => `${b.colunas[k]} → ${fn(ix)}`).join(', ')}`
-        : `    - "${r}": linha cinza de CONTA do operador — NÃO leia`).join('\n')).join('\n');
+        : `    - "${r}": linha cinza/tracejada de CONTA do operador — NÃO leia`).join('\n')).join('\n');
   const cab = f.parcial ? f.cab : cabDaFicha(f).map(c => c[1]);
   const cs = f.modo === 'csond';
   const abertura = f.parcial
@@ -10004,9 +10008,9 @@ Os dados ficam em${f.blocos.some(x => x.par) ? ' (as tabelas de peneiramento gro
 ${blocos}
 
 Também pode ser um rascunho livre ou a folha impressa da planilha com os mesmos dados — nesse caso, ache cada valor pelo rótulo.
-${cs ? `Ignore valores calculados (água, solo seco, umidade, densidade, pressão, ISC) e TODO quadro, linha ou coluna cinza marcado CONTA, mesmo preenchido: é a conta à mão do operador e pode estar errada. Leia só o que está listado acima.
+${cs ? `Ignore valores calculados (água, solo seco, umidade, densidade, pressão, ISC) e TODO quadro, linha ou coluna cinza/tracejado marcado CONTA, mesmo preenchido: é a conta à mão do operador e pode estar errada. Leia só o que está listado acima.
 Na folha impressa da planilha, a penetração do ISC vem em pares LEIT./PRESS. para 5 pontos: leia a coluna LEIT. dos pontos 2, 3 e 4.`
-  : 'Ignore valores calculados (teor, densidades, vazios, resistências, médias) e todo quadro, linha ou coluna cinza marcado CONTA: leia só o que está listado acima.'}
+  : 'Ignore valores calculados (teor, densidades, vazios, resistências, médias) e todo quadro, linha ou coluna cinza/tracejado marcado CONTA: leia só o que está listado acima.'}
 
 Responda só com este JSON:
 {"ficha": "código lido no topo ou null",
