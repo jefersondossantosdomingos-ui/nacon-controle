@@ -12845,7 +12845,8 @@ function montarSlab() {
     <div class="card">
       <h2>Identificação do ensaio <span class="tag">cabeçalho das 2 folhas</span></h2>
       <div class="grid4">
-        ${cabSl('registro', 'Registro de ensaio Nº <span class="obrig">obrigatório</span>')}
+        ${s.plano ? cabSl('registro', 'Registro de ensaio Nº <span class="obrig">do plano</span>').replace('<input ', '<input readonly title="Vem do plano de sondagem" ')
+          : cabSl('registro', 'Registro de ensaio Nº <span class="obrig">obrigatório</span>')}
         ${cabSl('furo', 'Estaca / Furo <span class="obrig">obrigatório</span>', 'text', 'Ex.: ST-01')}
         ${typeof usaPlanos === 'function' && usaPlanos()
           ? `<div><label>Ponto do plano de sondagem</label><select id="slPontoSel"><option value="">${PLANOS.planos.length ? '— escolher o ST —' : 'nenhum plano (aba Planos)'}</option>${
@@ -23376,30 +23377,31 @@ function marcarSondado(p, dados) {
   alterarPonto(p, { sondagem: { ...dados, por: quemSou(), em: new Date().toISOString() } });
 }
 
-/** Número único do laboratório: o banco reserva (atômico); sem banco, o contador deste aparelho. */
+/* Registro da amostra: SIGLA-PLANO-ST (ex.: NS-1139-ST001). O código do plano é único na empresa e o ST
+   é único no plano, então o mesmo registro nunca cai em dois pontos — nem em planos diferentes. */
+const SIGLA_REGISTRO = () => String((typeof MARCA === 'object' && MARCA && (MARCA.siglaFichas || (MARCA.banco || {}).empresa)) || 'LAB')
+  .toUpperCase().replace(/[^A-Z0-9]/g, '');
+const parteRegistro = t => normPl(t).replace(/[^A-Z0-9]/g, '');
+function registroDoPonto(p, pl = planoPorId(p.plano_id)) {
+  return `${SIGLA_REGISTRO()}-${parteRegistro(pl ? pl.codigo : 'PLANO')}-${parteRegistro(p.st)}`;
+}
+
+/** Dá o registro à amostra do ponto (uma vez só). Com banco, quem grava é o banco (registro único na empresa). */
 async function registrarAmostra(p) {
   if (p.registro) return p.registro;
+  const reg = registroDoPonto(p);
+  const outro = Object.values(PLANOS.pontos).flat().find(x => x.id !== p.id && String(x.registro || '') === reg);
+  if (outro) throw new Error(`O registro ${reg} já está no ${outro.st} de outro plano — confira o código dos planos.`);
   if (typeof bancoLigado === 'function' && bancoLigado()) {
     // o ponto precisa existir no banco antes da reserva
     if (PLANOS.pendentes.some(x => x.tipo === 'plano' && x.id === p.plano_id)) await sincronizarPlanosBanco();
-    const n = await pedidoBanco('/rest/v1/rpc/reservar_registro', { metodo: 'POST', corpo: { p_ponto: p.id, p_por: quemSou() } });
-    Object.assign(p, { registro: Number(n), registrado_em: new Date().toISOString(), registrado_por: quemSou() });
+    const n = await pedidoBanco('/rest/v1/rpc/reservar_registro', { metodo: 'POST', corpo: { p_ponto: p.id, p_registro: reg, p_por: quemSou() } });
+    Object.assign(p, { registro: String(n), registrado_em: new Date().toISOString(), registrado_por: quemSou() });
     gravarPlanos();
     return p.registro;
   }
-  const maior = Math.max(PLANOS.ultimoRegistro || 0, ...Object.values(PLANOS.pontos).flat().map(x => Number(x.registro) || 0));
-  const n = maior + 1;
-  PLANOS.ultimoRegistro = n;
-  alterarPonto(p, { registro: n, registrado_em: new Date().toISOString(), registrado_por: quemSou() });
-  return n;
-}
-
-async function definirUltimoRegistro(v) {
-  const n = Math.floor(Number(v));
-  if (!Number.isFinite(n) || n < 0) throw new Error('Digite o último número de registro usado.');
-  if (typeof bancoLigado === 'function' && bancoLigado()) await pedidoBanco('/rest/v1/rpc/definir_ultimo_registro', { metodo: 'POST', corpo: { p_valor: n } });
-  PLANOS.ultimoRegistro = n; gravarPlanos();
-  return n;
+  alterarPonto(p, { registro: reg, registrado_em: new Date().toISOString(), registrado_por: quemSou() });
+  return reg;
 }
 
 /** Abre (ou começa) o ensaio de solos do ponto, com o cabeçalho que o plano já sabe. */
@@ -23512,7 +23514,6 @@ async function sincronizarPlanosBanco() {
   PLANOS.planos = [...(planos || []), ...mantidos];
   const pts = {}; PLANOS.planos.forEach(p => { pts[p.id] = novos[p.id] || PLANOS.pontos[p.id] || []; });
   PLANOS.pontos = pts;
-  try { const u = await pedidoBanco('/rest/v1/rpc/ultimo_registro', { metodo: 'POST', corpo: {} }); if (Number.isFinite(Number(u))) PLANOS.ultimoRegistro = Number(u); } catch (e) {}
   gravarPlanos();
   if ($('planoConteudo') && $('aba-planos') && $('aba-planos').classList.contains('ativa')) montarPlanos();
   return { enviados, falhas };
@@ -23554,12 +23555,7 @@ function montarPlanos() {
     </div>
     ${imp ? cartaoImportacao(imp) : ''}
     ${pl ? painelDoPlano(pl, gestor) : ''}
-    <details class="card"><summary><h2>Numeração dos registros <span class="tag">último: ${PLANOS.ultimoRegistro || '—'}</span></h2></summary>
-      <p class="hint">Cada amostra registrada recebe o próximo número do laboratório, único na empresa. Para continuar a numeração que vocês já usam,
-        o gestor informa o último registro emitido.</p>
-      <div class="grid3"><div><label>Último registro já usado</label><input type="number" inputmode="numeric" id="plUltimo" value="${PLANOS.ultimoRegistro || ''}"></div>
-        <div style="align-self:end"><button class="btn ghost" type="button" id="plUltimoOk"${gestor ? '' : ' disabled title="Só o gestor"'}>Salvar numeração</button></div></div>
-    </details>`;
+    <p class="hint" style="margin:4px 4px 14px">Registro das amostras: <b>${SIGLA_REGISTRO()}-código do plano-ST</b> (ex.: ${SIGLA_REGISTRO()}-1139-ST001) — único em todos os planos.</p>`;
   ligarPlanos();
 }
 
@@ -23619,7 +23615,7 @@ function painelDoPlano(pl, gestor) {
     <div class="card">
       <h2>Pontos <span class="tag">${lista.length} de ${pts.length}</span></h2>
       <div class="grid3">
-        <div><label>Buscar ST, registro ou km</label><input type="search" id="plBusca" value="${atr(f.texto)}" placeholder="Ex.: ST-012 ou 18162"></div>
+        <div><label>Buscar ST, registro ou km</label><input type="search" id="plBusca" value="${atr(f.texto)}" placeholder="Ex.: ST-012 ou NS-1139-ST012"></div>
         <div><label>Situação</label><select id="plEtapa"><option value="">Todas</option>${ETAPAS_PLANO.map(([k, n]) => `<option value="${k}"${f.etapa === k ? ' selected' : ''}>${n} (${r.etapas[k]})</option>`).join('')}</select></div>
         <div><label>Trecho</label><select id="plTrecho"><option value="">Todos</option>${r.trechos.map(t => `<option value="${atr(t.nome)}"${f.trecho === t.nome ? ' selected' : ''}>${atr(trechoCurto(t.nome))}</option>`).join('')}</select></div>
       </div>
@@ -23677,7 +23673,7 @@ function detalheDoPonto(p, pl, gestor) {
     <div id="plsAviso"></div>
     <h4>2 · Amostra no laboratório</h4>
     ${p.registro ? `<p>Registro <b class="pl-reg">${p.registro}</b>${p.registrado_em ? ` · ${dataBrSl(String(p.registrado_em).slice(0, 10))}` : ''}${p.registrado_por ? ` · ${atr(p.registrado_por)}` : ''}</p>`
-      : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (próximo número)</button></div>`}
+      : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (${atr(registroDoPonto(p, pl))})</button></div>`}
     <h4>3 · Ensaios</h4>
     <div class="rasc-botoes"><button class="btn sm" type="button" id="plAbrir">${e ? 'Abrir o ensaio' : 'Começar o ensaio de laboratório'}</button>
       ${e ? `<span class="hint">Registro ${atr(e.resumo.registro)} · ${SITUACOES[situacaoDe(e)] || situacaoDe(e)}</span>` : ''}</div>
@@ -23734,7 +23730,7 @@ function ligarPlanos() {
       montarPlanos(); avisoPlano('plPontoAviso', 'ok', `${atr(p.st)} marcado como sondado.`);
     });
     on('plRegistrar', 'click', async () => {
-      try { const n = await registrarAmostra(p); montarPlanos(); avisoPlano('plPontoAviso', 'ok', `Amostra do ${atr(p.st)} registrada com o nº <b>${n}</b>.`); }
+      try { const n = await registrarAmostra(p); montarPlanos(); avisoPlano('plPontoAviso', 'ok', `Amostra do ${atr(p.st)} registrada: <b>${atr(n)}</b>.`); }
       catch (e) { avisoPlano('plPontoAviso', 'erro', atr(e.message)); }
     });
     on('plAbrir', 'click', async () => { try { await abrirEnsaioDoPonto(p); } catch (e) { avisoPlano('plPontoAviso', 'erro', atr(e.message)); } });
@@ -23764,10 +23760,7 @@ function ligarPlanos() {
   });
   on('plRelatorio', 'click', () => abrirRelatorioPlano(planoPorId(PLANOS.aberto)));
   on('plCsv', 'click', () => baixarCsvPlano(planoPorId(PLANOS.aberto)));
-  on('plUltimoOk', 'click', async () => {
-    try { const n = await definirUltimoRegistro($('plUltimo').value); montarPlanos(); avisoPlano('plAviso', 'ok', `Próxima amostra recebe o nº <b>${n + 1}</b>.`); }
-    catch (e) { avisoPlano('plAviso', 'erro', atr(e.message)); }
-  });
+
 }
 
 /* ------------------------------------------------------------
