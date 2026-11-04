@@ -759,7 +759,7 @@ details.card > summary::-webkit-details-marker{display:none;}
 .pl-barra i{display:block; height:100%; background:var(--mk-conforme-500);}
 .pl-chip{display:inline-block; font-size:11px; font-weight:700; padding:2px 6px; border-radius:10px; margin:1px 2px; border:1px solid var(--border); color:var(--text-2);}
 .pl-chip.ok{background:color-mix(in srgb, var(--mk-conforme-500) 22%, transparent); color:var(--text); border-color:var(--mk-conforme-500);}
-.pl-chip.meio{background:color-mix(in srgb, var(--mk-acento-500) 18%, transparent); color:var(--text); border-color:var(--mk-acento-500);}
+.pl-chip.meio{background:color-mix(in srgb, var(--mk-alerta-500) 18%, transparent); color:var(--text); border-color:var(--mk-alerta-500);}
 .pl-et{display:inline-block; font-size:11px; padding:2px 7px; border-radius:10px; background:var(--bg); border:1px solid var(--border); white-space:nowrap;}
 .pl-et.aprovado,.pl-et.enviado{border-color:var(--mk-conforme-500); font-weight:700;}
 .pl-et.aguardando,.pl-et.devolvido{border-color:var(--mk-acento-500); font-weight:700;}
@@ -24049,12 +24049,22 @@ function imprimirLaudosDoPlano(pl, pontos) {
   const ensaios = pontos.map(p => ensaioDoPonto(p, pl)).filter(Boolean);
   if (!ensaios.length) return 0;
   const naTela = fotografarEnsaio(), aba = document.querySelector('section.aba.ativa');
-  const html = ensaios.map(e => { aplicarEnsaio(e.foto); return $('folhaImpressao').innerHTML; }).join('');
-  aplicarEnsaio(naTela);
-  if (aba) irParaAba(aba.id.replace('aba-', ''));
-  $('folhaImpressao').innerHTML = html;
+  const partes = [];
+  try {
+    if (typeof FOLHAS_SO !== 'undefined') FOLHAS_SO = null;
+    if (typeof SECOES_SO !== 'undefined') SECOES_SO = null;
+    // cada laudo é montado e ESTICADO (gráficos desenhados) com os números dele antes de ir para o
+    // lote — esticar depois redesenhava os gráficos de todos com o ensaio que estava na tela
+    ensaios.forEach(e => { aplicarEnsaio(e.foto); encherFolhas($('folhaImpressao')); partes.push($('folhaImpressao').innerHTML); });
+  } finally { aplicarEnsaio(naTela); }
+  // volta à aba de antes sem irParaAba: ela agenda um atualizar() para o quadro seguinte, que
+  // repunha a folha do ensaio da tela por cima do lote antes da impressão (folhas em branco)
+  if (aba) document.querySelectorAll('section.aba').forEach(s => s.classList.toggle('ativa', s === aba));
+  const folha = $('folhaImpressao');
+  folha.innerHTML = partes.join('');
   window.addEventListener('afterprint', () => atualizar(), { once: true });
-  imprimirRelatorio();
+  folha.classList.add('montando');
+  requestAnimationFrame(() => { folha.classList.remove('montando'); window.print(); });
   return ensaios.length;
 }
 
