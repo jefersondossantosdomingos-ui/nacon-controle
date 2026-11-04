@@ -11923,6 +11923,16 @@ function gravarCampo(l, v) {
   if (!l.sel) { gravarCampoCs(l.caminho, v); return true; }
   const el = acharCampoRasc(l);
   if (!el) return false;
+  // ponto do plano (ST): compara o número do ST (ST-01 = ST-001), nunca um pedaço do texto (ST-01 ≠ ST-010)
+  if (l.tipo === 'st' && el.tagName === 'SELECT') {
+    const num = t => { const m = String(t || '').toUpperCase().match(/^\s*([A-Z]*)\s*-?\s*0*(\d+)/); return m ? m[1] + '-' + m[2] : null; };
+    const alvo = num(v);
+    const op = alvo && [...el.options].find(o => o.value && num(o.textContent.split(' · ')[0]) === alvo);
+    if (!op) return false;
+    el.value = op.value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
   if (el.tagName === 'SELECT') {
     if (v === null) return false;
     const alvo = semAcentoRasc(v), ops = [...el.options];
@@ -12808,6 +12818,8 @@ function calcularSlabTela() {
 
 function atualizarSlab() {
   if (!estado.slab) estado.slab = novoSlab();
+  // ensaio ligado ao plano: registro e ST sempre os do ponto
+  if (typeof alinharCabecalhoComPlano === 'function' && alinharCabecalhoComPlano()) montarSlab();
   const r = calcularSlabTela();
   desenharTelaSlab(r);
   return r;
@@ -12847,7 +12859,8 @@ function montarSlab() {
       <div class="grid4">
         ${s.plano ? cabSl('registro', 'Registro de ensaio Nº <span class="obrig">do plano</span>').replace('<input ', '<input readonly title="Vem do plano de sondagem" ')
           : cabSl('registro', 'Registro de ensaio Nº <span class="obrig">obrigatório</span>')}
-        ${cabSl('furo', 'Estaca / Furo <span class="obrig">obrigatório</span>', 'text', 'Ex.: ST-01')}
+        ${s.plano ? cabSl('furo', 'Estaca / Furo <span class="obrig">do plano</span>').replace('<input ', '<input readonly title="Vem do plano de sondagem" ')
+          : cabSl('furo', 'Estaca / Furo <span class="obrig">obrigatório</span>', 'text', 'Ex.: ST-01')}
         ${typeof usaPlanos === 'function' && usaPlanos()
           ? `<div><label>Ponto do plano de sondagem</label><select id="slPontoSel"><option value="">${PLANOS.planos.length ? '— escolher o ST —' : 'nenhum plano (aba Planos)'}</option>${
               opcoesPontosDoPlano((s.plano || {}).pontoId)}</select></div>`
@@ -13584,7 +13597,12 @@ const somaMinSl = (hhmm, n) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm
 
 const _sl = c => `[data-sl="${c}"]`;
 const _slc = c => `[data-slcab="${c}"]`;
-const CAB_SL = [
+/* Com plano de sondagem, o registro é o app que dá (SIGLA-PLANO-ST): a ficha leva só o ST, que escolhe o ponto. */
+const COM_PLANOS_SL = typeof MARCA === 'object' && MARCA && !!MARCA.planosSondagem;
+const CAB_SL = COM_PLANOS_SL ? [
+  ['ST (ponto do plano)', 'st', 'cab.st', 'st', '#slPontoSel'],
+  ['Laboratorista', 'laboratorista', 'cab.laboratorista', 'texto', _slc('laboratorista')],
+] : [
   ['Registro', 'registro', 'cab.registro', 'texto', _slc('registro')],
   ['Estaca / Furo', 'furo', 'cab.furo', 'texto', _slc('furo')],
   ['Laboratorista', 'laboratorista', 'cab.laboratorista', 'texto', _slc('laboratorista')],
@@ -23387,8 +23405,11 @@ function registroDoPonto(p, pl = planoPorId(p.plano_id)) {
 }
 
 /** Dá o registro à amostra do ponto (uma vez só). Com banco, quem grava é o banco (registro único na empresa). */
+const registroNoFormato = p => !!p.registro && String(p.registro) === registroDoPonto(p);
+
 async function registrarAmostra(p) {
-  if (p.registro) return p.registro;
+  // já tem o registro no formato SIGLA-PLANO-ST: é esse. Registro antigo (só número) é trocado pelo novo.
+  if (registroNoFormato(p)) return p.registro;
   const reg = registroDoPonto(p);
   const outro = Object.values(PLANOS.pontos).flat().find(x => x.id !== p.id && String(x.registro || '') === reg);
   if (outro) throw new Error(`O registro ${reg} já está no ${outro.st} de outro plano — confira o código dos planos.`);
@@ -23455,6 +23476,67 @@ function opcoesPontosDoPlano(selId) {
     return `<option value="${p.id}"${p.id === selId ? ' selected' : ''}>${atr(p.st)} · km ${kmTexto(p.km)}${extra}</option>`; }).join('')}</optgroup>`).join('');
 }
 
+/** O ponto do plano a que o ensaio pertence — pelo id e, se o plano foi importado de novo, pelo código + ST. */
+function pontoDoVinculo(v) {
+  if (!v) return null;
+  let p = pontoPorId(v.pontoId);
+  if (!p) { const pl = PLANOS.planos.find(x => x.codigo === v.codigo); if (pl) p = pontosDo(pl.id).find(x => x.st === v.st) || null; }
+  return p;
+}
+
+/** Ensaio ligado ao plano tem sempre o registro e o ST do ponto (corrige ensaio de antes do formato novo). */
+function alinharCabecalhoComPlano() {
+  const s = estado.slab;
+  if (!usaPlanos() || !s || !s.plano) return false;
+  const p = pontoDoVinculo(s.plano);
+  if (!p || !registroNoFormato(p)) return false;
+  let mudou = false;
+  if (s.plano.pontoId !== p.id) { s.plano.pontoId = p.id; s.plano.id = p.plano_id; mudou = true; }
+  if (String(estado.medicao.registro || '') !== String(p.registro)) { estado.medicao.registro = String(p.registro); mudou = true; }
+  if (estado.medicao.furo !== p.st) { estado.medicao.furo = p.st; mudou = true; }
+  return mudou;
+}
+
+/**
+ * Ensaios salvos antes do registro SIGLA-PLANO-ST (ex.: 18161) passam para o registro do ponto:
+ * o ponto ganha o registro novo, o ensaio salvo é regravado com ele e o antigo sai do banco.
+ */
+let migrandoRegistros = false;
+async function migrarRegistrosDoPlano() {
+  if (!usaPlanos() || migrandoRegistros || typeof historico === 'undefined') return 0;
+  migrandoRegistros = true;
+  let n = 0;
+  try {
+    for (const e of historico) {
+      const r = e.resumo || {}, v = ((e.foto || {}).estado || {}).slab ? e.foto.estado.slab.plano : null;
+      if (r.familia !== 'solos' || !(v || r.plano)) continue;
+      const p = pontoDoVinculo(v || { codigo: r.plano, st: r.st });
+      if (!p) continue;
+      if (!registroNoFormato(p)) { try { await registrarAmostra(p); } catch (erro) { continue; } }
+      if (String(r.registro) === String(p.registro) && r.estaca === p.st) continue;
+      // aprovado só o gestor regrava (o banco recusa do laboratorista)
+      if (situacaoDe(e) === 'aprovado' && !ehGestorPlano()) continue;
+      const chaveVelha = e.chaveNuvem || chaveDoEnsaio(r);
+      const est = e.foto.estado;
+      est.medicao.registro = String(p.registro); est.medicao.furo = p.st;
+      if (est.slab) est.slab.plano = { ...(est.slab.plano || {}), id: p.plano_id, pontoId: p.id, st: p.st, codigo: (planoPorId(p.plano_id) || {}).codigo || r.plano };
+      Object.assign(r, { registro: String(p.registro), estaca: p.st });
+      e.chaveNuvem = chaveDoEnsaio(r);
+      e.atualizadoEm = new Date().toISOString();
+      if (typeof marcarParaApagar === 'function' && chaveVelha !== e.chaveNuvem) marcarParaApagar(chaveVelha);
+      if (ENSAIO_NA_TELA && ENSAIO_NA_TELA.registro === String(chaveVelha.split('|')[2] || '')) ENSAIO_NA_TELA.registro = String(p.registro);
+      n++;
+    }
+    if (n) {
+      gravarHistorico();
+      if (alinharCabecalhoComPlano() && typeof atualizar === 'function') { montarSlab(); atualizar(); }
+      if (typeof montarHistorico === 'function') montarHistorico();
+      if (typeof sincronizarAoSalvar === 'function') sincronizarAoSalvar();
+    }
+  } finally { migrandoRegistros = false; }
+  return n;
+}
+
 function marcarEnviados(ids) {
   const agora = new Date().toISOString();
   ids.map(pontoPorId).filter(Boolean).forEach(p => alterarPonto(p, { enviado_em: agora, enviado_por: quemSou() }));
@@ -23515,6 +23597,7 @@ async function sincronizarPlanosBanco() {
   const pts = {}; PLANOS.planos.forEach(p => { pts[p.id] = novos[p.id] || PLANOS.pontos[p.id] || []; });
   PLANOS.pontos = pts;
   gravarPlanos();
+  setTimeout(() => { migrarRegistrosDoPlano().catch(() => 0); }, 0);
   if ($('planoConteudo') && $('aba-planos') && $('aba-planos').classList.contains('ativa')) montarPlanos();
   return { enviados, falhas };
 }
@@ -23532,6 +23615,7 @@ const rotEtapa = k => (ETAPAS_PLANO.find(e => e[0] === k) || [k, k])[1];
 function montarPlanos() {
   const alvo = $('planoConteudo');
   if (!alvo) return;
+  if (!migrandoRegistros) migrarRegistrosDoPlano().then(n => { if (n) montarPlanos(); }).catch(() => 0);
   const pl = planoPorId(PLANOS.aberto) || PLANOS.planos[0] || null;
   if (pl) PLANOS.aberto = pl.id;
   const gestor = ehGestorPlano();
@@ -23838,6 +23922,7 @@ function iniciarPlanos() {
   document.body.classList.toggle('sem-planos', !usaPlanos());
   if (!usaPlanos()) return;
   lerPlanos();
+  setTimeout(() => { migrarRegistrosDoPlano().catch(() => 0); }, 1200);
 }
 
 /* ============================================================
