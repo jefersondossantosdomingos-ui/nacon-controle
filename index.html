@@ -809,6 +809,8 @@ details.card > summary::-webkit-details-marker{display:none;}
 .pl-foto{display:flex; flex-direction:column; gap:3px; padding:0; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); overflow:hidden; cursor:pointer; text-align:left; color:var(--text);}
 .pl-foto img{width:100%; height:90px; object-fit:cover; background:var(--card-2);} .pl-foto span{font-size:11px; padding:2px 6px 5px;}
 .pl-tab td.pl-ruim{color:var(--mk-critico); font-weight:700;}
+.pl-spt td{padding:3px 2px;} .pl-spt td input{width:54px; min-width:44px; padding:6px 5px; text-align:right;} .pl-spt td.pen input{width:46px;}
+.pl-spt td:last-child input{width:100%; min-width:120px; text-align:left;}
 .leaflet-container{font:inherit;}
 .destaque-card{border:2px solid var(--mk-acento-500);}
 /* ===== ensaio de solos de laboratório: gráficos da tela e o laudo de 2 folhas (desenho da aba ST-01) ===== */
@@ -12309,7 +12311,8 @@ Leia cada PI da tabela na ordem em que aparece: o 1º PI vai na linha 1 (pi.0.*)
 /* o que a leitura trouxe, por linha — vira cadastro (pelo nº do PI) só ao Aplicar */
 let PIS_LIDOS = {};
 
-const todasFichas = () => [...FICHAS_CS, ...(typeof FICHAS_OUTRAS !== 'undefined' ? FICHAS_OUTRAS : []), FICHA_PIS];
+// ficha com "quando": vale só nessa situação (ex.: aba Boletim — ficha do trado ou do SPT, conforme o tipo escolhido)
+const todasFichas = () => [...FICHAS_CS, ...(typeof FICHAS_OUTRAS !== 'undefined' ? FICHAS_OUTRAS : []), FICHA_PIS].filter(f => !f.quando || f.quando());
 const _val = v => typeof v === 'function' ? v() : v;
 /** A ficha com títulos e colunas que dependem do ensaio (nomes dos agregados, graduação) já resolvidos. */
 function resolverFicha(f) {
@@ -13393,7 +13396,11 @@ function novoSlab(cfg = cfgSlabPadrao()) {
     adot: { ll: null, dmax: null, hot: null, cbr: null, exp: null },
     // boletim de sondagem à trado (NBR 9603) — aba "Boletim"; o campo preenche pelo plano (app-campo.js)
     bol: { data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: '', parada: '', cota: null,
-           outras: '', obs: '', camadas: [] },
+           outras: '', obs: '', camadas: [],
+           // percussão (SPT, NBR 6484): um clique troca o tipo na aba Boletim
+           tipo: 'trado', dataFim: '', naHora: '', verificacao: '', revisao: '', contrato: '', cidade: '', spt: [],
+           metodos: { cavadeira: { de: null, ate: null }, espiral: { de: null, ate: null }, lavagem: { de: null, ate: null } },
+           lavTempo: { inicio: null, e1: null, e2: null, e3: null } },
   };
 }
 
@@ -13624,6 +13631,15 @@ function resumoObraSl() {
   return [id.cliente, [id.prefixo, id.os].filter(Boolean).join(' / '), estado.medicao.obra].filter(Boolean).join(' · ');
 }
 
+/* campo que vem dos dados gerais do plano: travado aqui (muda-se na aba Planos, e vale para todos os furos) */
+function doPlanoSl(k, html) {
+  const s = estado.slab;
+  if (!s || !s.plano || typeof pontoDoVinculo !== 'function' || typeof dadosGeraisPlano !== 'function') return html;
+  const p = pontoDoVinculo(s.plano), pl = p && planoPorId(p.plano_id);
+  if (!pl || !dadosGeraisPlano(pl)[k]) return html;
+  return html.replace('<input ', '<input readonly title="Vem dos dados gerais do plano — mude na aba Planos" ');
+}
+
 function montarSlab() {
   const s = estado.slab;
   if (!s || !$('slIdent')) return;
@@ -13653,11 +13669,11 @@ function montarSlab() {
         <summary><b>Dados da obra</b><span class="hint">${atr(resumoObraSl() || 'a preencher')}</span></summary>
         <p class="hint" style="margin:6px 0 8px">Os mesmos em todos os furos${s.plano ? ' — vêm dos <b>dados gerais do plano</b> (aba Planos)' : ''}.</p>
         <div class="grid4">
-          <div><label>Prefixo da obra</label>${tSl('ident.prefixo', 'Ex.: NE-0000')}</div>
-          <div><label>Nº Ordem de Serviço</label>${tSl('ident.os', 'Ex.: OS 000')}</div>
-          <div style="grid-column:span 2"><label>Cliente</label>${tSl('ident.cliente')}</div>
-          <div style="grid-column:span 2">${cabSl('obra', 'Obra').replace(/^<div>|<\/div>$/g, '')}</div>
-          <div style="grid-column:span 2"><label>Estudo</label>${tSl('ident.estudo', 'Ex.: ESTUDO DO SUBLEITO')}</div>
+          <div><label>Prefixo da obra</label>${doPlanoSl('prefixo', tSl('ident.prefixo', 'Ex.: NE-0000'))}</div>
+          <div><label>Nº Ordem de Serviço</label>${doPlanoSl('ordem', tSl('ident.os', 'Ex.: OS 000'))}</div>
+          <div style="grid-column:span 2"><label>Cliente</label>${doPlanoSl('cliente', tSl('ident.cliente'))}</div>
+          <div style="grid-column:span 2">${doPlanoSl('obra', cabSl('obra', 'Obra').replace(/^<div>|<\/div>$/g, ''))}</div>
+          <div style="grid-column:span 2"><label>Estudo</label>${doPlanoSl('estudo', tSl('ident.estudo', 'Ex.: ESTUDO DO SUBLEITO'))}</div>
           <div style="grid-column:span 2"><label>Laboratoristas (folha)</label>${tSl('ident.laboratoristas', (cfg.laboratoristas || '').replace(/\n/g, ' · '), false)}</div>
           ${cabSl('engenheiro', 'Resp. técnico', 'text', cfg.responsavel || '')}
         </div>
@@ -14411,6 +14427,7 @@ const FICHAS_SLAB = [
       fAt('Laboratoristas', 'labs', _sl('ident.laboratoristas'), 'texto', 2)] }] },
   // boletim de sondagem à trado (NBR 9603): a ficha que vai para o campo — as escolhas vêm escritas no rótulo
   { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)', repeteCab: ['sondador'],
+    quando: () => !(estado.slab && estado.slab.bol && estado.slab.bol.tipo === 'spt'),
     cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]],
     blocos: [
       { tipo: 'campos', titulo: 'Furo', campos: [fAt('Data de execução', 'bolData', _sl('bol.data'), 'data'),
@@ -14486,7 +14503,36 @@ const FICHAS_SLAB = [
         linhas: SLAB.PENETRACOES.slice(1).map(([t, mm], k) => linSl(`${String(t).replace('.', ',')} min · ${String(mm.toFixed(2)).replace('.', ',')} mm`, i => `cbr.pontos.${i}.pen.${k + 1}`)) },
     ] },
 ];
-if (typeof FICHAS_OUTRAS !== 'undefined') FICHAS_OUTRAS.push(...FICHAS_SLAB);
+/* Boletim por percussão (SPT, NBR 6484): a ficha do campo quando a aba Boletim está em "Percussão".
+   Folha 1: o furo, os métodos, a lavagem por tempo e as camadas; folha 2: os golpes, metro a metro. */
+const SPT_COLS = ['g.0', 'p.0', 'g.1', 'p.1', 'g.2', 'p.2'];
+const FICHA_SLAB_SPT = { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2P', titulo: 'Sondagem a percussão — SPT (NBR 6484)', compacta: true, densa: true,
+  quando: () => !!(estado.slab && estado.slab.bol && estado.slab.bol.tipo === 'spt'),
+  cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]], repeteCab: ['sondador'], repete: ['sptVerif'],
+  blocos: [
+    { tipo: 'campos', titulo: 'Furo', campos: [fAt('Início', 'sptInicio', _sl('bol.data'), 'data'), fAt('Fim', 'sptFim', _sl('bol.dataFim'), 'data'),
+      fAt('Verificação', 'sptVerif', _sl('bol.verificacao'), 'texto'),
+      fAt('Profundidade do furo (m)', 'sptProf', _sl('bol.prof')), fAt('Cota (m)', 'sptCota', _sl('bol.cota')),
+      fAt('Nível d\'água (seco / sim)', 'sptSeco', _sl('bol.naSeco'), 'texto'),
+      fAt('Prof. do N.A. (m)', 'sptNa', _sl('bol.na')), fAt('Hora da leitura do N.A.', 'sptNaHora', _sl('bol.naHora'), 'texto'),
+      fAt('Final do furo (lavagem por tempo / amostrador / limite / trépano)', 'sptFinal', _sl('bol.parada'), 'texto'),
+      fAt('Observações', 'sptObs', _sl('bol.obs'), 'texto', 3)] },
+    { tipo: 'grade', titulo: 'Método de perfuração (m)', colunas: ['Início', 'Término'], idx: [0, 1],
+      linhas: [['T. cavadeira', 'cavadeira'], ['T. espiral', 'espiral'], ['Lavagem', 'lavagem']].map(([rot, k]) =>
+        [rot, c => `bol.metodos.${k}.${c ? 'ate' : 'de'}`, 'num', 'm', c => _sl(`bol.metodos.${k}.${c ? 'ate' : 'de'}`)]) },
+    { tipo: 'grade', titulo: 'Lavagem por tempo — 30 min (m)', colunas: ['Prof. início', 'Estágio 1', 'Estágio 2', 'Estágio 3'], idx: [0, 1, 2, 3],
+      linhas: [['Profundidade', c => `bol.lavTempo.${['inicio', 'e1', 'e2', 'e3'][c]}`, 'num', 'm', c => _sl(`bol.lavTempo.${['inicio', 'e1', 'e2', 'e3'][c]}`)]] },
+    { tipo: 'grade', titulo: 'Camadas (descrição do material, de cima para baixo)', add: '#bolCamada',
+      colunas: ['De (m)', 'Até (m)', 'Material', 'Complemento', 'Cor', 'Interp. geol. (AT, SR, SP…)'], idx: [0, 1, 2, 3, 4, 5],
+      tipos: ['num', 'num', 'texto', 'texto', 'texto', 'texto'],
+      linhas: [0, 1, 2, 3, 4].map(k => [`Camada ${k + 1}`, c => `bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'geo'][c]}`, 'num', '',
+        c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'geo'][c]}`)]) },
+    { tipo: 'grade', quebra: true, titulo: 'Golpes por metro — penetração (cm) em branco = 15', add: '#bolSptMais',
+      colunas: ['1º golpes', 'cm', '2º golpes', 'cm', '3º golpes', 'cm'], idx: [0, 1, 2, 3, 4, 5],
+      linhas: Array.from({ length: 20 }, (_, i) => [`${i + 1},00 m`, c => `bol.spt.${i}.${SPT_COLS[c]}`, 'num', '', c => _sl(`bol.spt.${i}.${SPT_COLS[c]}`)]) },
+  ] };
+
+if (typeof FICHAS_OUTRAS !== 'undefined') FICHAS_OUTRAS.push(...FICHAS_SLAB, FICHA_SLAB_SPT);
 
 /* ------------------------------------------------------------
    Resumo para o histórico e a planilha do Drive
@@ -24630,12 +24676,12 @@ function alinharCabecalhoComPlano() {
   if (s.plano.pontoId !== p.id) { s.plano.pontoId = p.id; s.plano.id = p.plano_id; mudou = true; }
   if (String(estado.medicao.registro || '') !== String(p.registro)) { estado.medicao.registro = String(p.registro); mudou = true; }
   if (estado.medicao.furo !== p.st) { estado.medicao.furo = p.st; mudou = true; }
-  // dados gerais do plano preenchidos depois de o ensaio existir: completam o que estiver vazio
+  // os dados gerais do plano mandam na identificação de todos os furos (mudou no plano, muda aqui)
   const pl = planoPorId(p.plano_id);
   if (pl) {
     const g = dadosGeraisPlano(pl), id = s.ident;
-    [['cliente', g.cliente], ['prefixo', g.prefixo], ['os', g.ordem], ['estudo', g.estudo]].forEach(([k, v]) => { if (v && !id[k]) { id[k] = v; mudou = true; } });
-    if (g.obra && !estado.medicao.obra) { estado.medicao.obra = g.obra; mudou = true; }
+    [['cliente', g.cliente], ['prefixo', g.prefixo], ['os', g.ordem], ['estudo', g.estudo]].forEach(([k, v]) => { if (v && id[k] !== v) { id[k] = v; mudou = true; } });
+    if (g.obra && estado.medicao.obra !== g.obra) { estado.medicao.obra = g.obra; mudou = true; }
   }
   return mudou;
 }
@@ -25604,11 +25650,16 @@ function svgPerfilBoletim(camadas, profFuro, so) {
      (cliente, obra, local, OS) — é o que vale quando existe;
    · do ponto do plano (o que o campo marcou no celular), para completar o que faltar.
    ------------------------------------------------------------ */
-const CAMPOS_BOL = ['data', 'sondador', 'prof', 'relevo', 'vegetacao', 'terreno', 'na', 'naSeco', 'parada', 'cota', 'outras', 'obs'];
+const CAMPOS_BOL = ['data', 'sondador', 'prof', 'relevo', 'vegetacao', 'terreno', 'na', 'naSeco', 'parada', 'cota', 'outras', 'obs',
+  'tipo', 'dataFim', 'naHora', 'verificacao', 'revisao', 'contrato', 'cidade'];
+const OBJETOS_BOL = ['spt', 'metodos', 'lavTempo'];     // só do ensaio (o campo não tem): passam inteiros
 const vazioBol = () => ({ data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: '', parada: '', cota: null,
-  outras: '', obs: '', camadas: [] });
+  outras: '', obs: '', camadas: [], tipo: 'trado', dataFim: '', naHora: '', verificacao: '', revisao: '', contrato: '', cidade: '', spt: [],
+  metodos: { cavadeira: { de: null, ate: null }, espiral: { de: null, ate: null }, lavagem: { de: null, ate: null } },
+  lavTempo: { inicio: null, e1: null, e2: null, e3: null } });
 const temValor = v => !(v === undefined || v === null || v === '' || v === false || (Array.isArray(v) && !v.length));
-const bolPreenchido = b => !!b && (temValor(b.data) || ehNumero(b.prof) || (b.camadas || []).length > 0 || temValor(b.relevo) || temValor(b.parada));
+const bolPreenchido = b => !!b && (temValor(b.data) || ehNumero(b.prof) || (b.camadas || []).length > 0 || temValor(b.relevo) || temValor(b.parada)
+  || (b.spt || []).some(l => (l.g || []).some(ehNumero)));
 
 /** O que o ponto do plano tem, no formato do boletim. */
 function bolDoPonto(p) {
@@ -25621,6 +25672,7 @@ function bolDoPonto(p) {
 function juntarBol(manda, completa) {
   const r = vazioBol();
   [...CAMPOS_BOL, 'camadas'].forEach(k => { r[k] = temValor((manda || {})[k]) ? manda[k] : ((completa || {})[k] ?? r[k]); });
+  OBJETOS_BOL.forEach(k => { const v = (manda && manda[k]) || (completa && completa[k]); if (v !== undefined) r[k] = copiaCampo(v); });
   return r;
 }
 
@@ -25648,12 +25700,13 @@ function bolParaPonto() {
 /** Cabeçalho do boletim: o do ensaio (Identificação) e, no que faltar, o do plano. */
 function cabBoletim(pl, est) {
   const id = (est && est.slab && est.slab.ident) || {}, m = (est && est.medicao) || {};
-  const [prefixoPl, osPl] = separarPrefixoOs(pl && pl.os);
+  // furo do plano: os DADOS GERAIS DO PLANO mandam (são os mesmos em todos os furos);
+  // a Identificação do ensaio só completa o que o plano não tiver
+  const g = pl && typeof dadosGeraisPlano === 'function' ? dadosGeraisPlano(pl) : {};
   let prefixo = id.prefixo || '', ordem = id.os || '';
   if (!prefixo && /\//.test(ordem)) [prefixo, ordem] = separarPrefixoOs(ordem);
-  // Local do boletim: o do plano ("BR-000, CIDADE - UF"); o do laudo leva o km na frente
-  return { cliente: id.cliente || (pl && pl.cliente) || '', obra: m.obra || (pl && (pl.obra || pl.nome)) || '',
-    local: (pl && pl.rodovia) || id.local || '', prefixo: prefixo || prefixoPl, ordem: ordem || osPl, dataEnsaio: m.dataEnsaio || '' };
+  return { cliente: g.cliente || id.cliente || '', obra: g.obra || m.obra || (pl && pl.nome) || '',
+    local: g.rodovia || id.local || '', prefixo: g.prefixo || prefixo, ordem: g.ordem || ordem, dataEnsaio: m.dataEnsaio || '' };
 }
 /** "NE-0000 / OS 000" → ['NE-0000', 'OS 000']; sem barra, é só a OS. */
 function separarPrefixoOs(t) {
@@ -25766,10 +25819,170 @@ const CSS_BOLETIM = `
   .folha.nbol .grade-fotos img{flex:1;min-height:0;width:100%;object-fit:contain;object-position:left top}
   .folha.nbol .grade-fotos figcaption{font-size:7pt;padding-top:1mm}`;
 
+/* ============================================================
+   PERFIL INDIVIDUAL DE SONDAGEM A PERCUSSÃO (SPT) — NBR 6484/2020
+   O mesmo boletim do ensaio, com um clique no tipo: trado ou SPT.
+     bol.tipo = 'trado' | 'spt'
+     bol.spt  = [{ g: [g1, g2, g3], p: [cm1, cm2, cm3], compac }]   uma linha por metro (1 m, 2 m…)
+     bol.metodos = { cavadeira: {de, ate}, espiral: {de, ate}, lavagem: {de, ate} }
+     bol.lavTempo = { inicio, e1, e2, e3 }   (lavagem por tempo — 30 min)
+     camadas[].geo = interpretação geológica (AT, SR, SP…)
+   ============================================================ */
+const GEO_SPT = [['SO', 'Solo orgânico'], ['SM', 'Sedimentos marinhos'], ['AT', 'Aterro'], ['AL', 'Sedimentos aluvionares'], ['CO', 'Sedimentos coluvionares'],
+  ['ST', 'Sedimentos terciários'], ['SR', 'Solo residual de rocha'], ['SAR', 'Solo de alteração de rocha'], ['SP', 'Saprolito'], ['RC', 'Rocha']];
+const PARADAS_SPT = [['lavagem', 'Impenetrável à lavagem por tempo'], ['amostrador', 'Impenetrável ao amostrador (NBR 6484)'],
+  ['plano', 'Limite de sondagem (prof. do projeto)'], ['rocha', 'Impenetrável ao trépano (rocha)'], ['outro', 'Outro (ver observação)']];
+const LEGENDA_SPT = 'SO=Solo Orgânico; SM=Sedimentos Marinhos; AT=Aterro; AL=Sedimentos Aluvionares; CO=Sedimentos Coluvionares; ST=Sedimentos Terciários; '
+  + 'SR=Solo Residual de Rocha; SAR=Solo de Alteração de Rocha; SP=Saprolito; RC=Rocha.';
+
+/** N-SPT do metro: golpes dos 30 cm finais; se o amostrador não completou, "golpes/penetração" (ex.: 35/28, 31/6). */
+function nSpt(l) {
+  const g = (l && l.g) || [], p = [0, 1, 2].map(k => ehNumero(((l && l.p) || [])[k]) ? l.p[k] : 15);
+  const k = g.filter(ehNumero).length;
+  if (!k) return null;
+  if (k >= 3 && p[1] + p[2] === 30) { const n = g[1] + g[2]; return { n, txt: String(n), cheio: true }; }
+  const ini = k >= 2 ? 1 : 0, gs = g.slice(ini, k).reduce((a, x) => a + x, 0), ps = p.slice(ini, k).reduce((a, x) => a + x, 0);
+  return { n: ps > 0 ? Math.round(gs * 30 / ps) : null, txt: `${gs}/${ps}`, cheio: false };
+}
+/** Compacidade (areias e siltes arenosos) ou consistência (argilas e siltes argilosos) — NBR 6484:2020, tabela A.1 */
+function classeSpt(n, material) {
+  if (!ehNumero(n)) return '';
+  const t = normPl(material || '');
+  const areia = /^AREI|^PEDREG|^CASCALH|SILTE ARENOS|^SILTE$/.test(t) && !/ARGIL/.test(t.split(' ')[0]);
+  if (areia) return n <= 4 ? 'FOFA(O)' : n <= 8 ? 'POUCO COMPACTA(O)' : n <= 18 ? 'MEDIANAMENTE COMPACTA(O)' : n <= 40 ? 'COMPACTA(O)' : 'MUITO COMPACTA(O)';
+  return n <= 2 ? 'MUITO MOLE' : n <= 5 ? 'MOLE' : n <= 10 ? 'MÉDIA(O)' : n <= 19 ? 'RIJA(O)' : n <= 30 ? 'MUITO RIJA(O)' : 'DURA(O)';
+}
+const camadaNaProf = (camadas, z) => (camadas || []).find(c => ehNumero(c.de) && ehNumero(c.ate) && z > c.de && z <= c.ate + 1e-9) || null;
+const cidadeDoEndereco = e => { const m = /([A-ZÀ-Úa-zà-ú][A-Za-zÀ-ú ]+?)\s*-\s*([A-Z]{2})\b/.exec(String(e || '')); return m ? `${m[1].trim()}/${m[2]}` : ''; };
+const MESES_BR = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const dataExtensoBr = iso => { const d = new Date(String(iso || '') + 'T12:00:00'); return isNaN(d) ? '' : `${d.getDate()} ${MESES_BR[d.getMonth()]}, ${d.getFullYear()}`; };
+
+/** A folha do perfil SPT (A4 retrato, como o modelo da NACON). */
+function htmlFolhaSpt(d, folhaTxt = '1 / 1') {
+  const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
+  const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
+  const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
+  const responsavel = S.responsavel || M.responsavel || '', crea = S.crea || M.crea || '';
+  const b = d.bol, p = d.p, pl = d.pl || {}, so = d.so || {};
+  const camadas = (b.camadas || []).filter(c => ehNumero(c.de) && ehNumero(c.ate)).sort((a, x) => a.de - x.de);
+  const linhas = b.spt || [];
+  const prof = ehNumero(b.prof) ? b.prof : (camadas.length ? camadas[camadas.length - 1].ate : linhas.length);
+  const escala = Math.max(20, Math.ceil(Math.max(prof || 0, linhas.length) / 5) * 5);
+  // colunas (unidades do desenho; 1 un ≈ 0,277 mm): gráfico | N | golpes ×3 | escala | prof | perfil | geol | descrição | compac. | NA
+  const X = { gr: 0, n: 90, g1: 118, g2: 140, g3: 162, es: 184, pr: 208, pf: 240, ge: 274, de: 312, co: 640, na: 672, fim: 700 };
+  const H = 660, top = 52, y = z => top + z * (H - top - 6) / escala, P = [];
+  const vl = (x, y0 = 0, y1 = H, w = .7) => P.push(`<line x1="${x}" x2="${x}" y1="${y0}" y2="${y1}" stroke="#000" stroke-width="${w}"/>`);
+  const tx = (x, yy, t, o = {}) => P.push(`<text x="${x}" y="${yy}" font-size="${o.fs || 7.5}" text-anchor="${o.a || 'middle'}"${o.b ? ' font-weight="700"' : ''}${o.rot ? ` transform="rotate(-90 ${x} ${yy})"` : ''}${o.cor ? ` fill="${o.cor}"` : ''}>${t}</text>`);
+  // cabeçalho das colunas
+  tx(45, 12, 'RESISTÊNCIA A', { fs: 6.2 }); tx(45, 19, 'PENETRAÇÃO (S.P.T.)', { fs: 6.2 }); tx(45, 26, '30cm FINAIS', { fs: 6.2 });
+  [0, 10, 20, 30, 40, 50].forEach(v => { const x = 4 + v * 1.66; tx(x, 47, v, { fs: 5.5 }); });
+  tx(104, 30, 'N-SPT', { fs: 7, rot: true }); tx(151, 18, 'NUMERO', { fs: 6.5 }); tx(151, 27, 'DE', { fs: 6.5 }); tx(151, 36, 'GOLPES', { fs: 6.5 });
+  tx(196, 30, 'ESCALA (m)', { fs: 5.8, rot: true }); tx(224, 20, 'PROF.', { fs: 6 }); tx(224, 28, 'CAMADA', { fs: 6 }); tx(224, 36, '(m)', { fs: 6 });
+  tx(257, 30, 'PERFIL GEOLÓGICO', { fs: 5.6, rot: true }); tx(293, 24, 'INTER.', { fs: 6.5 }); tx(293, 33, 'GEOL.', { fs: 6.5 });
+  tx(476, 30, 'DESCRIÇÃO DO MATERIAL', { fs: 7 });
+  [['COMPACIDADE', 649], ['OU', 656], ['CONSISTÊNCIA', 663]].forEach(([t, x]) => tx(x, 28, t, { fs: 4.4, rot: true })); tx(686, 26, 'N.A.', { fs: 7 }); tx(686, 35, '(m)', { fs: 7 });
+  P.push(`<line x1="0" x2="${X.fim}" y1="${top}" y2="${top}" stroke="#000" stroke-width=".9"/>`);
+  // linhas por metro e escala
+  for (let m = 1; m <= escala; m++) P.push(`<line x1="${X.gr}" x2="${X.es}" y1="${y(m)}" y2="${y(m)}" stroke="#000" stroke-width=".35"/><line x1="${X.co}" x2="${X.na}" y1="${y(m)}" y2="${y(m)}" stroke="#000" stroke-width=".35"/>`);
+  for (let i = 0; i <= escala * 5; i++) { const z = i / 5, g = i % 25 === 0; P.push(`<line x1="${X.pr - (g ? 9 : 4)}" x2="${X.pr}" y1="${y(z)}" y2="${y(z)}" stroke="#000" stroke-width=".4"/>`);
+    if (g) tx(X.pr - 12, y(z) + 3, fmt(z, 0), { fs: 6, a: 'end' }); }
+  [10, 20, 30, 40].forEach(v => vl(4 + v * 1.66, top, H, .25));
+  // golpes, N e o gráfico
+  const pts = [];
+  for (let m = 0; m < escala; m += 2) P.push(`<rect x="${X.n + 1}" y="${y(m)}" width="4" height="${y(1) - y(0)}" fill="#000"/>`);
+  const meioDaLinha = i => (y(i + 1) + y(i + 2)) / 2 + 3;        // ensaio do metro z: amostrador de z a z + 0,45 m
+  linhas.forEach((l, i) => {
+    const z = i + 1, r = nSpt(l); if (!r) return;
+    const yy = meioDaLinha(i);
+    tx((X.n + X.g1) / 2 + 2, yy, r.txt, { fs: 6.8, b: true });
+    (l.g || []).forEach((g, k) => { if (ehNumero(g)) tx([X.g1, X.g2, X.g3][k] + 11, yy, `${g}/${ehNumero((l.p || [])[k]) ? l.p[k] : 15}`, { fs: 6.2 }); });
+    if (ehNumero(r.n)) pts.push([4 + Math.min(50, r.n) * 1.66, yy - 3]);
+  });
+  if (pts.length > 1) P.push(`<polyline points="${pts.map(q => q.map(v => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="#e00000" stroke-width="1.3"/>`);
+  // camadas: profundidade, hachura, interpretação, descrição; compacidade por metro
+  camadas.forEach(c => {
+    const y0 = y(c.de), y1 = y(c.ate);
+    P.push(`<line x1="${X.pr}" x2="${X.co}" y1="${y1}" y2="${y1}" stroke="#000" stroke-width=".6"/>`);
+    tx(X.pr + 4, y0 + 9, fmt(c.de, 2), { fs: 6.8, a: 'start', b: true });
+    P.push(`<rect x="${X.pf + 4}" y="${y0}" width="${X.ge - X.pf - 8}" height="${y1 - y0}" fill="#fff" stroke="#000" stroke-width=".6"/>`);
+    hachurasDoSolo(c).forEach(h => P.push(`<rect x="${X.pf + 4}" y="${y0}" width="${X.ge - X.pf - 8}" height="${y1 - y0}" fill="url(#h-${h})"/>`));
+    tx((X.ge + X.de) / 2, (y0 + y1) / 2 + 3, atr(c.geo || ''), { fs: 7 });
+    tx((X.de + X.co) / 2, (y0 + y1) / 2 + 3, atr(descBoletim(c).toUpperCase()), { fs: 7 });
+  });
+  if (ehNumero(prof)) {
+    tx(X.pr + 4, y(prof) + 9, fmt(prof, 2), { fs: 6.8, a: 'start', b: true });
+    P.push(`<line x1="${X.pr}" x2="${X.co}" y1="${y(prof)}" y2="${y(prof)}" stroke="#000" stroke-width=".6"/>`);
+    tx((X.de + X.co) / 2, y(prof) + 11, atr((PARADAS_SPT.find(x => x[0] === b.parada) || ['', ''])[1]), { fs: 7.2 });
+  }
+  linhas.forEach((l, i) => {
+    const r = nSpt(l); if (!r) return;
+    const c = camadaNaProf(camadas, i + 1) || camadaNaProf(camadas, i + 0.5);
+    const t = (l.compac || classeSpt(r.n, c && c.material)).trim();
+    // como no modelo: palavras longas quebradas em pedaços que cabem na coluna (MEDIANA / MENTE / COMPAC / TA(O))
+    const ws = t.split(' ').flatMap(w => w.length > 7 ? w.match(/.{1,7}/g) : [w]), yy = meioDaLinha(i) - 3 - (ws.length - 1) * 2.6;
+    ws.forEach((w, k) => tx((X.co + X.na) / 2, yy + k * 5.4, atr(w), { fs: 4.8 }));
+  });
+  if (b.naSeco) tx((X.na + X.fim) / 2, y(0) + 11, 'SECO', { fs: 7.5 });
+  else if (ehNumero(b.na)) P.push(`<path d="M${(X.na + X.fim) / 2 - 5} ${y(b.na) - 8}h10l-5 8z"/>`), tx((X.na + X.fim) / 2, y(b.na) + 10, fmt(b.na, 2), { fs: 6.5 });
+  [X.n, X.g1, X.g2, X.g3, X.es, X.pr, X.pf, X.ge, X.de, X.co, X.na].forEach((x, i) => vl(x, i === 2 || i === 3 ? 39 : 0, H, i === 1 || i === 4 ? .9 : .6));
+  P.push(`<line x1="${X.g1}" x2="${X.es}" y1="39" y2="39" stroke="#000" stroke-width=".4"/>`);
+  const svg = `<svg class="perfil" viewBox="0 0 ${X.fim} ${H}">${DEF_HACHURAS}${P.join('')}</svg>`;
+  // rodapé
+  const met = b.metodos || {}, lv = b.lavTempo || {};
+  const mt = (rot, o) => `<tr><td class="d">${rot}:</td><td class="c">${o && ehNumero(o.de) ? fmt(o.de, 2) : ''}</td><td class="c">${o && ehNumero(o.ate) ? fmt(o.ate, 2) : ''}</td></tr>`;
+  const leit = [{ data: b.dataFim || b.data, hora: b.naHora || '', na: b.naSeco ? 'SECO' : ehNumero(b.na) ? fmt(b.na, 2) : '' }, {}, {}, {}];
+  const cidade = b.cidade || cidadeDoEndereco(endereco.join(' '));
+  const contrato = b.contrato || [d.ordem, d.prefixo, d.obra].filter(Boolean).join(' ');
+  const g = p ? geoDoPonto(p) : null;
+  return `<div class="folha nbol nspt" data-cheia="1">
+    <div class="titulo">PERFIL INDIVIDUAL DE SONDAGEM A PERCUSSÃO (SPT)<small>Ensaio realizado conforme a NBR 6484/20 - Sondagens de simples reconhecimento com SPT.</small></div>
+    <table class="cabspt"><tr>
+      <td class="esq"><div><span>Cliente:</span> ${atr(d.cliente)}</div><div><span>Obra:</span> ${atr([d.prefixo, d.obra].filter(Boolean).join(' '))}</div>
+        <div><span>Local:</span> ${atr(d.local)}</div>
+        <div><span>Data:</span> Início: ${b.data ? dataBrSl(b.data) : ''}<br><span></span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Fim: ${(b.dataFim || b.data) ? dataBrSl(b.dataFim || b.data) : ''}</div></td>
+      <td class="dir"><div class="furo">Furo: <b>${atr(d.estaca)}</b></div><div>Cota(m): ${ehNumero(b.cota) ? fmt(b.cota, 3) : '-'}</div>
+        <div>Coordenadas: N= ${p && ehNumero(p.norte) ? p.norte.toFixed(4).replace('.', ',') : ''}</div><div class="e">E= ${p && ehNumero(p.este) ? p.este.toFixed(4).replace('.', ',') : ''}</div></td>
+      <td class="fo">Folha:<b>${folhaTxt}</b></td></tr></table>
+    ${svg}
+    <div class="leg">LEGENDA DAS ABREVIAÇÕES PRESENTES NA COLUNA DE INTERPRETAÇÃO GEOLÓGICA:<br>${LEGENDA_SPT}</div>
+    <table class="rodspt"><tr>
+      <td><table class="mini"><tr><th>Leitura</th><th>Data</th><th>Hora</th><th>N.A. (m)</th></tr>
+        ${leit.map((l, i) => `<tr><td class="c">${i + 1}</td><td class="c">${l.data ? dataBrSl(l.data) : ''}</td><td class="c">${atr(l.hora || '')}</td><td class="c">${atr(l.na || '')}</td></tr>`).join('')}</table></td>
+      <td><table class="mini"><tr><th>Método</th><th>Início (m)</th><th>Término (m)</th></tr>${mt('T.Cavadeira', met.cavadeira)}${mt('T. Espiral', met.espiral)}${mt('Lavagem', met.lavagem)}</table></td>
+      <td><table class="mini"><tr><th colspan="2">Lavagem por tempo - 30 min</th></tr>
+        <tr><td class="d">Prof. Início (m):</td><td>${ehNumero(lv.inicio) ? fmt(lv.inicio, 2) : ''}</td></tr>
+        ${[1, 2, 3].map(k => `<tr><td class="d">Estágio ${k} (m):</td><td>${ehNumero(lv['e' + k]) ? fmt(lv['e' + k], 2) : ''}</td></tr>`).join('')}</table></td>
+      <td class="obs"><u>Observação:</u><br>${atr(b.obs || '')}</td></tr></table>
+    <table class="assspt"><tr>
+      <td>${atr(cidade)}${cidade ? ', ' : ''}${atr(dataExtensoBr(d.dataEnsaio || b.dataFim || b.data))}<br>Contrato nº: ${atr(contrato)}<br>Revisão: ${atr(b.revisao || 'R0')}</td>
+      <td>Sondador: ${atr(b.sondador || '')}<br>Verificação: ${atr(b.verificacao || '')}</td>
+      <td>Resp. Técnico:<div class="ass">${atr(responsavel)}<br>${atr(crea)}</div></td>
+      <td class="lg">${logo ? `<img src="${logo}" alt="">` : ''}</td></tr></table>
+    <div class="nota">NOTA: Os resultados apresentados no presente documento referem-se exclusivamente à amostra ensaiada. A reprodução deste documento somente poderá ser feita na íntegra, após aprovação prévia e por escrito da empresa.</div>
+    <div class="endspt">${endereco.map(atr).join(' · ')}</div>
+  </div>`;
+}
+
+const CSS_SPT = `
+  .folha.nspt{font-size:7.6pt}
+  .folha.nspt .titulo{font-size:11pt;padding:1.2mm 0 .6mm} .folha.nspt .titulo small{display:block;font-size:6.6pt;font-weight:400;border-top:.3mm solid #000;margin-top:.8mm;padding-top:.4mm}
+  .folha.nspt .cabspt td{vertical-align:top;padding:1.2mm 2mm;border-bottom:.35mm solid #000} .folha.nspt .cabspt .esq div{margin:.6mm 0}
+  .folha.nspt .cabspt .esq span{display:inline-block;width:14mm;text-align:right;margin-right:1.5mm}
+  .folha.nspt .cabspt .dir{width:62mm;text-align:right} .folha.nspt .cabspt .dir div{margin:.6mm 0} .folha.nspt .cabspt .furo b{font-size:12pt}
+  .folha.nspt .cabspt .fo{width:14mm;text-align:center} .folha.nspt .cabspt .fo b{display:block;font-size:10pt;margin-top:1mm}
+  .folha.nspt .leg{font-size:6pt;padding:.8mm 1.2mm;border-top:.35mm solid #000;border-bottom:.35mm solid #000}
+  .folha.nspt .rodspt > tbody > tr > td{vertical-align:top;padding:1mm} .folha.nspt .mini{width:100%} .folha.nspt .mini th{font-weight:400;text-decoration:underline;font-size:6.6pt;text-align:center}
+  .folha.nspt .mini td{font-size:6.4pt;padding:.2mm .8mm} .folha.nspt .mini td.c{text-align:center} .folha.nspt .mini td.d{text-align:right}
+  .folha.nspt .rodspt .obs{width:28%;font-size:6.8pt}
+  .folha.nspt .assspt td{vertical-align:top;padding:1mm 1.5mm;font-size:7pt;border-top:.35mm solid #000;line-height:1.5} .folha.nspt .assspt .ass{text-align:center;margin-top:2mm;font-size:6.6pt;line-height:1.3}
+  .folha.nspt .assspt .lg{text-align:right;width:40mm} .folha.nspt .assspt .lg img{height:11mm}
+  .folha.nspt .nota{font-size:5.6pt;padding:.6mm 1.2mm;border-top:.35mm solid #000} .folha.nspt .endspt{font-size:6.4pt;font-weight:700;padding:.6mm 1.2mm 1mm}`;
+
 /** Folha do boletim no PDF do laudo de solos (vem antes das folhas do laboratório). */
 function folhaSlabBol(pacote) {
   if (estado.modo !== 'slab' || !estado.slab || !bolPreenchido(estado.slab.bol)) return [];
-  return [`<style>${CSS_BOLETIM}</style>` + htmlFolhaBoletim(dadosBoletimDoEnsaio())];
+  const d = dadosBoletimDoEnsaio();
+  return [`<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d) : htmlFolhaBoletim(d))];
 }
 
 async function htmlBoletins(pl, pontos) {
@@ -25781,7 +25994,7 @@ async function htmlBoletins(pl, pontos) {
     const d = dadosBoletimDoPonto(p, pl);
     const fotos = [];
     for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
-    folhas.push(htmlFolhaBoletim(d, fotos.length ? '1/2' : 'Única'));
+    folhas.push(d.bol.tipo === 'spt' ? htmlFolhaSpt(d, fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(d, fotos.length ? '1/2' : 'Única'));
     if (fotos.length) folhas.push(`<div class="folha nbol fotos-folha">
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(p.st)} · ${atr(d.cliente || '')}</div>
@@ -25791,7 +26004,7 @@ async function htmlBoletins(pl, pontos) {
   }
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Boletins de sondagem — plano ${atr(pl.codigo)}</title><style>
     @page{size:A4;margin:9mm 8mm} body{margin:0}
-    ${CSS_BOLETIM}
+    ${CSS_BOLETIM}${CSS_SPT}
     .folha.nbol{break-after:page} .folha.nbol:last-child{break-after:auto}
   </style></head><body>${folhas.join('')}</body></html>`;
 }
@@ -25805,7 +26018,15 @@ function htmlAbaBoletimSlab() {
   if (s.bol.naSeco === true) s.bol.naSeco = '1'; else if (s.bol.naSeco === false) s.bol.naSeco = '';
   const b = s.bol, d = dadosBoletimDoEnsaio(), p = d.p, so = d.so || {};
   const op = (lista, pares) => [['', ''], ...(pares ? lista : lista.map(x => [x, x]))];
-  const camadas = (b.camadas || []).map((c, i) => `<div class="pl-cam">
+
+  const doCampo = p && (so.data || (so.camadas || []).length || so.fim);
+  const spt = b.tipo === 'spt';
+  b.tipo = spt ? 'spt' : 'trado';
+  b.spt = b.spt || []; b.metodos = b.metodos || {}; ['cavadeira', 'espiral', 'lavagem'].forEach(k => { b.metodos[k] = b.metodos[k] || { de: null, ate: null }; });
+  b.lavTempo = b.lavTempo || { inicio: null, e1: null, e2: null, e3: null };
+  const tipoBt = (k, rot, sub) => `<button type="button" class="pl-passo${b.tipo === k ? ' feito proximo' : ''}" data-boltipo="${k}"><span class="rot">${rot}</span><span class="hr">${sub}</span></button>`;
+  const geoOp = [['', ''], ...GEO_SPT.map(([k, t]) => [k, `${k} — ${t}`])];
+  const camadasHtml = (b.camadas || []).map((c, i) => `<div class="pl-cam">
       <div class="pl-cam-topo"><b>Camada ${i + 1}</b><button class="btn ghost sm" type="button" data-bolcamtira="${i}" title="Tirar camada">✕</button></div>
       <div class="pl-cam-grade">
         <div><label>De (m)</label>${nSl(`bol.camadas.${i}.de`, '0.05')}</div>
@@ -25813,41 +26034,71 @@ function htmlAbaBoletimSlab() {
         <div><label>Material</label>${selSl(`bol.camadas.${i}.material`, op(MATERIAIS_SOLO))}</div>
         <div><label>Complemento</label>${tSl(`bol.camadas.${i}.compl`, 'Ex.: com pedregulhos', false)}</div>
         <div><label>Cor</label>${selSl(`bol.camadas.${i}.cor`, op(CORES_SOLO))}</div>
-        <div><label>Umidade</label>${selSl(`bol.camadas.${i}.umidade`, op(UMIDADES_SOLO))}</div>
+        ${spt ? `<div><label>Interp. geológica</label>${selSl(`bol.camadas.${i}.geo`, geoOp)}</div>` : `<div><label>Umidade</label>${selSl(`bol.camadas.${i}.umidade`, op(UMIDADES_SOLO))}</div>`}
       </div></div>`).join('');
-  const doCampo = p && (so.data || (so.camadas || []).length || so.fim);
-  return `
+  const linhasSpt = b.spt.map((l, i) => {
+    const r = nSpt(l), c = camadaNaProf(b.camadas, i + 1) || camadaNaProf(b.camadas, i + 0.5);
+    return `<tr><td class="cap">${i + 1},00</td>${[0, 1, 2].map(k => `<td data-rot="${k + 1}º golpes">${nSl(`bol.spt.${i}.g.${k}`, '1')}</td><td data-rot="cm" class="pen">${nSl(`bol.spt.${i}.p.${k}`, '1').replace('<input ', '<input placeholder="15" ')}</td>`).join('')}
+      <td class="num forte" data-sptn="${i}">${r ? r.txt : '—'}</td>
+      <td>${tSl(`bol.spt.${i}.compac`, r ? classeSpt(r.n, c && c.material) : '')}</td></tr>`; }).join('');
+  return `${typeof cartaoRascunho === 'function' ? cartaoRascunho('slbol') : ''}
     ${doCampo ? `<div class="card destaque-card"><h2>Do campo <span class="tag">${atr(p.st)}</span></h2>
       <p class="hint" style="margin:0 0 8px">${[so.data && 'sondado em ' + dataBrSl(so.data), so.equipe, ehNumero(so.prof) && fmt(so.prof, 2) + ' m',
         (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${so.fim.dist} m do ponto` : ''}`,
         (so.fotos || []).length && so.fotos.length + ' foto(s)'].filter(Boolean).join(' · ')}</p>
       <button class="btn ghost sm" type="button" id="bolPuxar">Puxar de novo o que o campo marcou</button></div>` : ''}
     <div class="card">
-      <h2>Boletim de sondagem à trado <span class="tag">NBR 9603</span></h2>
-      <p class="hint" style="margin:0 0 10px">Cliente, obra, local e OS vêm da aba <b>Identificação</b><span id="bolFalta"></span>.
+      <h2>Boletim de sondagem <span class="tag">${spt ? 'SPT · NBR 6484' : 'trado · NBR 9603'}</span></h2>
+      <div class="pl-passos" style="grid-template-columns:1fr 1fr">${tipoBt('trado', 'Trado', 'NBR 9603')}${tipoBt('spt', 'Percussão (SPT)', 'NBR 6484')}</div>
+      <p class="hint" style="margin:0 0 10px">Cliente, obra, local, prefixo e OS vêm dos <b>dados gerais do plano</b> (ou da Identificação)<span id="bolFalta"></span>.
         A folha do boletim sai na frente do laudo.</p>
       <div class="grid4">
-        <div><label>Data de execução</label>${dSl('bol.data')}</div>
+        <div><label>${spt ? 'Início' : 'Data de execução'}</label>${dSl('bol.data')}</div>
+        ${spt ? `<div><label>Fim</label>${dSl('bol.dataFim')}</div>` : ''}
         <div><label>Sondador</label>${tSl('bol.sondador')}</div>
+        ${spt ? `<div><label>Verificação</label>${tSl('bol.verificacao', '', false)}</div>` : ''}
         <div><label>Profundidade do furo (m)</label>${nSl('bol.prof', '0.01')}</div>
         <div><label>Cota (m) <span class="hint">opcional</span></label>${nSl('bol.cota', '0.001')}</div>
-        <div><label>Relevo</label>${selSl('bol.relevo', op(RELEVOS))}</div>
+        ${spt ? '' : `<div><label>Relevo</label>${selSl('bol.relevo', op(RELEVOS))}</div>
         <div><label>Vegetação</label>${selSl('bol.vegetacao', op(VEGETACOES))}</div>
-        <div><label>Terreno</label>${selSl('bol.terreno', op(TERRENOS, true))}</div>
+        <div><label>Terreno</label>${selSl('bol.terreno', op(TERRENOS, true))}</div>`}
         <div><label>Nível d'água</label>${selSl('bol.naSeco', [['', 'Encontrado / a medir'], ['1', 'Furo seco']]).replace('<select ', '<select data-remonta="1" ')}</div>
-        <div><label>Prof. do nível d'água (m)</label>${b.naSeco ? '<input type="text" disabled value="SECO">' : nSl('bol.na', '0.01')}</div>
-        <div style="grid-column:span 2"><label>Furo paralisado por</label>${selSl('bol.parada', op(PARADAS, true))}</div>
-        <div style="grid-column:span 2"><label>Outras informações <span class="hint">em branco: km, amostra e hora do furo</span></label>${tSl('bol.outras', '', false)}</div>
+        <div><label>Prof. do nível d'água (m)</label>${b.naSeco ? nSl('bol.na', '0.01').replace('<input ', '<input disabled placeholder="SECO" ') : nSl('bol.na', '0.01')}</div>
+        ${spt ? `<div><label>Hora da leitura do N.A.</label>${hSl('bol.naHora')}</div>` : ''}
+        <div style="grid-column:span 2"><label>${spt ? 'Final do furo' : 'Furo paralisado por'}</label>${selSl('bol.parada', op(spt ? PARADAS_SPT : PARADAS, true))}</div>
+        ${spt ? `<div style="grid-column:span 2"><label>Contrato nº <span class="hint">em branco: OS + prefixo + obra</span></label>${tSl('bol.contrato', '', false)}</div>
+        <div><label>Revisão</label>${tSl('bol.revisao', 'R0')}</div>`
+          : `<div style="grid-column:span 2"><label>Outras informações <span class="hint">em branco: km, amostra e hora do furo</span></label>${tSl('bol.outras', '', false)}</div>`}
         <div style="grid-column:span 4"><label>Observações</label>${tSl('bol.obs', '', false)}</div>
       </div>
-      <h3 class="sub-card">Camadas do solo (descrição tátil-visual)</h3>
-      <div class="pl-camadas">${camadas || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
+      ${spt ? `<h3 class="sub-card">Golpes (SPT) — por metro <span class="hint">penetração em branco = 15 cm</span></h3>
+      <div class="tabwrap"><table class="t-form pl-spt"><thead><tr><th>Prof. (m)</th><th>1º</th><th>cm</th><th>2º</th><th>cm</th><th>3º</th><th>cm</th><th>N-SPT</th><th>Compacidade / consistência</th></tr></thead>
+        <tbody>${linhasSpt || '<tr><td colspan="9" class="hint">Toque em + Metro para lançar os golpes de cada metro.</td></tr>'}</tbody></table></div>
+      <div class="rasc-botoes" style="margin-top:8px"><button class="btn ghost sm" type="button" id="bolSptMais">+ Metro</button>
+        ${b.spt.length ? '<button class="btn ghost sm" type="button" id="bolSptMenos">✕ Último metro</button>' : ''}</div>
+      <h3 class="sub-card">Método de perfuração (m)</h3>
+      <div class="grid4">
+        <div><label>T. cavadeira — início</label>${nSl('bol.metodos.cavadeira.de', '0.01')}</div><div><label>T. cavadeira — término</label>${nSl('bol.metodos.cavadeira.ate', '0.01')}</div>
+        <div><label>T. espiral — início</label>${nSl('bol.metodos.espiral.de', '0.01')}</div><div><label>T. espiral — término</label>${nSl('bol.metodos.espiral.ate', '0.01')}</div>
+        <div><label>Lavagem — início</label>${nSl('bol.metodos.lavagem.de', '0.01')}</div><div><label>Lavagem — término</label>${nSl('bol.metodos.lavagem.ate', '0.01')}</div>
+      </div>
+      <h3 class="sub-card">Lavagem por tempo — 30 min (m)</h3>
+      <div class="grid4">
+        <div><label>Prof. início</label>${nSl('bol.lavTempo.inicio', '0.01')}</div><div><label>Estágio 1</label>${nSl('bol.lavTempo.e1', '0.01')}</div>
+        <div><label>Estágio 2</label>${nSl('bol.lavTempo.e2', '0.01')}</div><div><label>Estágio 3</label>${nSl('bol.lavTempo.e3', '0.01')}</div>
+      </div>` : ''}
+      <h3 class="sub-card">Camadas do solo (descrição ${spt ? 'do material' : 'tátil-visual'})</h3>
+      <div class="pl-camadas">${camadasHtml || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
       <button class="btn ghost sm" type="button" id="bolCamada">+ Camada</button>
     </div>`;
 }
 
 /** O que falta no cabeçalho do boletim — atualizado a cada digitação (a Identificação é outra aba). */
 function avisoFaltaBol() {
+  const b = estado.slab && estado.slab.bol;
+  if (b && b.spt) document.querySelectorAll('[data-sptn]').forEach(td => { const r = nSpt(b.spt[+td.dataset.sptn]); td.textContent = r ? r.txt : '—';
+    const inp = td.nextElementSibling && td.nextElementSibling.querySelector('input'), c = camadaNaProf(b.camadas, +td.dataset.sptn + 1);
+    if (inp) inp.placeholder = r ? classeSpt(r.n, c && c.material) : ''; });
   const el = $('bolFalta'); if (!el) return;
   const d = dadosBoletimDoEnsaio(), falta = [!d.cliente && 'Cliente', !d.ordem && 'OS', !d.local && 'Local'].filter(Boolean);
   el.innerHTML = falta.length ? ` — <b class="pl-ruim">faltam: ${falta.join(', ')}</b>` : '';
@@ -25863,6 +26114,10 @@ function ligarAbaBoletimSlab() {
   });
   document.querySelectorAll('[data-bolcamtira]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
     bt.addEventListener('click', () => { s.bol.camadas.splice(+bt.dataset.bolcamtira, 1); montarSlab(); atualizar(); }); });
+  document.querySelectorAll('[data-boltipo]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
+    bt.addEventListener('click', () => { s.bol.tipo = bt.dataset.boltipo; montarSlab(); atualizar(); }); });
+  on('bolSptMais', () => { s.bol.spt.push({ g: [null, null, null], p: [null, null, null], compac: '' }); montarSlab(); atualizar(); });
+  on('bolSptMenos', () => { s.bol.spt.pop(); montarSlab(); atualizar(); });
   on('bolPuxar', () => { const d = dadosBoletimDoEnsaio(); if (d.p && puxarCampoParaBol(d.p, { tudo: true })) { montarSlab(); atualizar(); } });
 }
 
