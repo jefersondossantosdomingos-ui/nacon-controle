@@ -24979,7 +24979,12 @@ const MATERIAIS_SOLO = ['Argila', 'Argila siltosa', 'Argila arenosa', 'Silte', '
   'Areia argilosa', 'Areia siltosa', 'Pedregulho', 'Cascalho laterítico', 'Aterro', 'Solo orgânico', 'Rocha alterada'];
 const CORES_SOLO = ['Vermelha', 'Vermelho-amarelada', 'Amarela', 'Marrom', 'Cinza', 'Branca', 'Preta', 'Variegada', 'Roxa', 'Rosada'];
 const UMIDADES_SOLO = ['Seca', 'Úmida', 'Muito úmida', 'Saturada'];
-const PARADAS = [['plano', 'Atingiu a profundidade do plano'], ['impenetravel', 'Impenetrável ao trado'], ['agua', 'Nível d\'água / desmoronamento'], ['outro', 'Outro motivo (ver observação)']];
+// as mesmas opções do boletim da NBR 9603 ("Furo paralisado por")
+const PARADAS = [['plano', 'Atingir prof. do projeto'], ['impenetravel', 'Terreno resistente'], ['rocha', 'Estrato rochoso'],
+  ['agua', 'Lençol freático'], ['desmoronamento', 'Desmoronamento das paredes'], ['outro', 'Outro (ver observação)']];
+const RELEVOS = ['Plano', 'Suave ondulado', 'Ondulado', 'Montanhoso', 'Encosta', 'Baixada'];
+const VEGETACOES = ['Rasteira', 'Arbustiva', 'Arbórea', 'Sem vegetação', 'Cultivo / pastagem'];
+const TERRENOS = [['seco', 'Seco'], ['umido', 'Úmido'], ['alagado', 'Alagado']];
 const COR_ETAPA = { asondar: '#9AA0A6', sondado: '#2B7BD8', registrado: '#7B5CD6', ensaio: '#E8930C', aguardando: '#E8930C',
   devolvido: '#D93025', aprovado: '#1E9D55', enviado: '#0B6B3A' };
 
@@ -25141,7 +25146,11 @@ function htmlCampoDoPonto(p, pl) {
       <div><label>Observação</label><input type="text" id="plsObs" value="${atr(so.obs || '')}" placeholder="Ex.: chuva no dia"></div>
       <div><label>Nível d'água (m)</label><input type="number" inputmode="decimal" step="0.01" id="plsNa" value="${b.na ?? ''}"${b.naSeco ? ' disabled' : ''}>
         <label class="pl-feito pl-seco"><input type="checkbox" id="plsSeco"${b.naSeco ? ' checked' : ''}> Furo seco (sem água)</label></div>
-      <div style="grid-column:span 3"><label>Motivo da parada</label><select id="plsParada"><option value=""></option>${PARADAS.map(([k, t]) => `<option value="${k}"${b.parada === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div><label>Relevo</label><select id="plsRelevo">${opc(RELEVOS, so.relevo || ultimoDoPlano(p, 'relevo'))}</select></div>
+      <div><label>Vegetação</label><select id="plsVeg">${opc(VEGETACOES, so.vegetacao || ultimoDoPlano(p, 'vegetacao'))}</select></div>
+      <div><label>Terreno</label><select id="plsTerreno"><option value=""></option>${TERRENOS.map(([k, t]) => `<option value="${k}"${(so.terreno || (b.naSeco ? 'seco' : '')) === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div><label>Cota (m) <span class="hint">opcional</span></label><input type="number" inputmode="decimal" step="0.001" id="plsCota" value="${so.cota ?? ''}"></div>
+      <div style="grid-column:span 3"><label>Furo paralisado por</label><select id="plsParada"><option value=""></option>${PARADAS.map(([k, t]) => `<option value="${k}"${b.parada === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
     </div>`)}
     ${bloco('camadas', 'Camadas do solo', nCam ? `${nCam} camada(s)${rascCampo()[p.id] ? ' · não salvas' : ''}` : 'nenhuma ainda', `
       <div class="pl-camadas">${camadas || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
@@ -25153,6 +25162,12 @@ function htmlCampoDoPonto(p, pl) {
       <div class="pl-fotos">${fotos}</div>`)}
     <div class="rasc-botoes pl-acoes"><button class="btn sm" type="button" id="plsOk">${so.data ? 'Salvar sondagem' : 'Marcar como sondado'}</button>
       ${so.data ? '<button class="btn ghost sm" type="button" id="plsBoletim">Boletim (PDF)</button>' : ''}</div>`;
+}
+
+/** Relevo e vegetação costumam repetir de um furo para o outro: sugere o último usado no plano. */
+function ultimoDoPlano(p, k) {
+  const l = pontosDo(p.plano_id).map(x => x.sondagem || {}).filter(so => so[k] && so.em).sort((a, b) => String(b.em).localeCompare(String(a.em)));
+  return l.length ? l[0][k] : '';
 }
 
 /* Quais blocos do ponto estão abertos — resiste à tela ser remontada (sincronização a cada 15 s).
@@ -25205,7 +25220,8 @@ function ligarCampoDoPonto(p, pl) {
     if (erro) { avisoPlano('plsAviso', 'erro', `Camada de ${fmt(erro.de, 2)} m: o "até" tem de ser maior que o "de".`); return; }
     const fim = sondagemDe(p).fim, gps = fim && ehNumero(fim.lat) ? { lat: fim.lat, lon: fim.lon, distancia: fim.dist ?? null } : {};
     marcarSondado(p, { data: $('plsData').value, prof: Number.isFinite(prof) ? prof : null, equipe: $('plsEquipe').value.toUpperCase().trim(),
-      obs: $('plsObs').value.trim(), camadas, na: r.naSeco ? null : (r.na ?? null), naSeco: !!r.naSeco, parada: r.parada || '', ...gps });
+      obs: $('plsObs').value.trim(), relevo: $('plsRelevo').value, vegetacao: $('plsVeg').value, terreno: $('plsTerreno').value,
+      cota: Number.isFinite(parseFloat($('plsCota').value)) ? parseFloat($('plsCota').value) : null, camadas, na: r.naSeco ? null : (r.na ?? null), naSeco: !!r.naSeco, parada: r.parada || '', ...gps });
     delete rascCampo()[p.id]; gravarRascCampo();
     ABERTO_CAMPO[p.id] = { dados: false, camadas: false, fotos: false };     // salvo: a tela volta a ficar enxuta
     montarPlanos(); avisoPlano('plPontoAviso', 'ok', `${atr(p.st)}: sondagem salva.`);
@@ -25346,92 +25362,165 @@ function svgCroqui(pl, larg = 1000, alt = 260) {
 /* ------------------------------------------------------------
    Boletim de sondagem a trado (PDF): uma folha por furo
    ------------------------------------------------------------ */
-const PADRAO_SOLO = m => {
-  const t = normPl(m);
-  if (/ORGAN/.test(t)) return ['#4E3B2A', 'linhas'];
-  if (/ATERRO/.test(t)) return ['#9A9A9A', 'xis'];
-  if (/ROCHA/.test(t)) return ['#7D7D7D', 'xis'];
-  if (/PEDREG|CASCALHO/.test(t)) return ['#C9A86A', 'bolas'];
-  if (/^AREIA/.test(t)) return ['#F1D27A', 'pontos'];
-  if (/^SILTE/.test(t)) return ['#D9C29A', 'tracos'];
-  if (/^ARGILA/.test(t)) return ['#C47B52', 'linhas'];
-  return ['#E0E0E0', ''];
-};
-function svgPerfil(camadas, profMax, amostra) {
-  const H = 430, W = 90, topo = 14, esc = (H - topo - 10) / Math.max(profMax, 0.5), y = m => topo + m * esc;
-  const pad = `<defs>
-    <pattern id="pp" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r=".9" fill="#000" fill-opacity=".55"/></pattern>
-    <pattern id="pl" width="8" height="5" patternUnits="userSpaceOnUse"><path d="M0 2.5H8" stroke="#000" stroke-opacity=".45" stroke-width=".7"/></pattern>
-    <pattern id="pt" width="10" height="6" patternUnits="userSpaceOnUse"><path d="M1 3H5" stroke="#000" stroke-opacity=".5" stroke-width=".8"/></pattern>
-    <pattern id="pb" width="12" height="10" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.2" fill="none" stroke="#000" stroke-opacity=".55" stroke-width=".7"/></pattern>
-    <pattern id="px" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0L8 8M8 0L0 8" stroke="#000" stroke-opacity=".4" stroke-width=".6"/></pattern></defs>`;
-  const cod = { pontos: 'pp', linhas: 'pl', tracos: 'pt', bolas: 'pb', xis: 'px' };
-  const regua = [];
-  for (let m = 0; m <= profMax + 1e-9; m += profMax > 3 ? 0.5 : 0.25)
-    regua.push(`<line x1="34" x2="40" y1="${y(m)}" y2="${y(m)}" stroke="#000" stroke-width=".6"/><text x="31" y="${y(m) + 3}" font-size="8" text-anchor="end">${fmt(m, 2)}</text>`);
-  const blocos = camadas.filter(c => ehNumero(c.de) && ehNumero(c.ate)).map(c => {
-    const [cor, p] = PADRAO_SOLO(c.material);
-    return `<rect x="40" y="${y(c.de)}" width="${W}" height="${Math.max(1, y(c.ate) - y(c.de))}" fill="${cor}" stroke="#000" stroke-width=".6"/>`
-      + (p ? `<rect x="40" y="${y(c.de)}" width="${W}" height="${Math.max(1, y(c.ate) - y(c.de))}" fill="url(#${cod[p]})"/>` : '');
-  }).join('');
-  const am = amostra ? `<path d="M${44 + W} ${y(amostra.de)}h6v${y(amostra.ate) - y(amostra.de)}h-6" fill="none" stroke="#C00" stroke-width="1.2"/>
-    <text x="${54 + W}" y="${(y(amostra.de) + y(amostra.ate)) / 2}" font-size="8" fill="#C00" transform="rotate(90 ${54 + W} ${(y(amostra.de) + y(amostra.ate)) / 2})" text-anchor="middle">amostra ${atr(amostra.reg || '')}</text>` : '';
-  return `<svg viewBox="0 0 ${W + 70} ${H}" width="${(W + 70) * 0.26}mm" height="${H * 0.26}mm">${pad}
-    <text x="40" y="9" font-size="8">Prof. (m)</text><line x1="40" x2="40" y1="${topo}" y2="${y(profMax)}" stroke="#000"/>${regua.join('')}${blocos}
-    <rect x="40" y="${topo}" width="${W}" height="${y(profMax) - topo}" fill="none" stroke="#000" stroke-width=".8"/>${am}</svg>`;
+/* Hachura do perfil, como nos boletins da NBR 9603: cada componente do solo tem o seu traço e
+   eles se sobrepõem (argila arenosa com pedregulhos = traços da argila + pontos da areia + seixos) */
+function hachurasDoSolo(c) {
+  const t = normPl(`${c.material || ''} ${c.compl || ''}`), h = [];
+  if (/ORGAN/.test(t)) h.push('org');
+  if (/ATERRO/.test(t)) h.push('ate');
+  if (/ROCHA/.test(t)) h.push('roc');
+  if (/ARGIL/.test(t)) h.push('arg');
+  if (/SILT/.test(t)) h.push('sil');
+  if (/AREI|ARENOS/.test(t)) h.push('are');
+  if (/PEDREG|CASCALH|SEIX|LATERIT/.test(t)) h.push('ped');
+  return h.length ? h : ['arg'];
+}
+const DEF_HACHURAS = `<defs>
+  <pattern id="h-arg" width="34" height="34" patternUnits="userSpaceOnUse"><path d="M-4 38L38 -4M-4 4L4 -4M30 38L38 30" stroke="#000" stroke-width=".9"/></pattern>
+  <pattern id="h-are" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="4" r="1.5"/><circle cx="10.5" cy="11" r="1.5"/></pattern>
+  <pattern id="h-sil" width="16" height="10" patternUnits="userSpaceOnUse"><path d="M2 5H9" stroke="#000" stroke-width=".9"/></pattern>
+  <pattern id="h-ped" width="36" height="40" patternUnits="userSpaceOnUse"><path d="M21 6l3-3.4 4 .9.6 3.6-3.4 2.2-3.6-1.2z" fill="#fff" stroke="#000" stroke-width=".8"/><path d="M4 25l3-3.4 4 .9.6 3.6-3.4 2.2-3.6-1.2z" fill="#fff" stroke="#000" stroke-width=".8"/></pattern>
+  <pattern id="h-org" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#444"/><path d="M0 6H12" stroke="#fff" stroke-width=".8"/></pattern>
+  <pattern id="h-ate" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M0 0L16 16M16 0L0 16" stroke="#000" stroke-width=".8"/></pattern>
+  <pattern id="h-roc" width="24" height="16" patternUnits="userSpaceOnUse"><path d="M0 8H24M6 0V8M18 8V16" stroke="#000" stroke-width=".9"/></pattern></defs>`;
+
+/* "Argila arenosa, com pedregulhos, marrom": material, complemento, cor e umidade */
+const descBoletim = c => [c.material, c.compl, c.cor ? c.cor.toLowerCase() : '', c.umidade ? c.umidade.toLowerCase() : ''].filter(Boolean).join(', ');
+const BANDAS_UTM = 'CDEFGHJKLMNPQRSTUVWX';
+const zonaUtm = (pl, g) => `${pl.fuso || 20}${g ? BANDAS_UTM[Math.max(0, Math.min(19, Math.floor((g.lat + 80) / 8)))] : (pl.hemisferio || 'S')}`;
+
+/** O perfil (régua, hachura, descrição e nível d'água) num só desenho, na largura da folha. */
+function svgPerfilBoletim(camadas, profFuro, so) {
+  const W = 700, H = 550;                                   // 1 unidade ≈ 0,27 mm: perfil de 186 × 146 mm
+  const xH = 62, wH = 64, xD = 126, wD = 515, xN = 641, wN = 59;
+  const escala = Math.max(5, Math.ceil(Math.max(profFuro || 0, ...camadas.map(c => c.ate || 0)) * 2) / 2);
+  const y = m => 12 + m * (H - 22) / escala;
+  const p = [];
+  // régua: traço a cada 0,1 m, maior e com número a cada 0,5 m
+  for (let i = 0; i <= Math.round(escala * 10); i++) {
+    const m = i / 10, grande = i % 5 === 0;
+    p.push(`<line x1="${grande ? 22 : 42}" x2="56" y1="${y(m)}" y2="${y(m)}" stroke="#000" stroke-width="${grande ? .9 : .6}"/>`);
+    if (grande) p.push(`<text x="6" y="${y(m) - 3}" font-size="10">${fmt(m, 1)}</text>`);
+  }
+  p.push(`<line x1="56" x2="56" y1="${y(0)}" y2="${y(escala)}" stroke="#000" stroke-width=".8"/>`);
+  // camadas: hachura, linha de mudança com a profundidade, descrição no meio
+  camadas.forEach((c, i) => {
+    const y0 = y(c.de), y1 = y(c.ate);
+    p.push(`<rect x="${xH + 14}" y="${y0}" width="${wH - 28}" height="${y1 - y0}" fill="#fff" stroke="#000" stroke-width=".8"/>`);
+    hachurasDoSolo(c).forEach(h => p.push(`<rect x="${xH + 14}" y="${y0}" width="${wH - 28}" height="${y1 - y0}" fill="url(#h-${h})"/>`));
+    p.push(`<line x1="${xD}" x2="${xN - 8}" y1="${y1}" y2="${y1}" stroke="#000" stroke-width=".6"/>`);
+    p.push(`<text x="${xD + 8}" y="${y1 - 4}" font-size="11">${fmt(c.ate, 2)}</text>`);
+    p.push(`<text x="${xD + wD / 2}" y="${(y0 + y1) / 2 + 5}" font-size="14.5" text-anchor="middle" font-family="Calibri, Carlito, Arial, sans-serif">${atr(descBoletim(c))}</text>`);
+  });
+  const fundo = camadas.length ? camadas[camadas.length - 1].ate : profFuro;
+  if (ehNumero(fundo)) {
+    if (!camadas.length) { p.push(`<line x1="${xD}" x2="${xN - 8}" y1="${y(fundo)}" y2="${y(fundo)}" stroke="#000" stroke-width=".6"/>`);
+      p.push(`<text x="${xD + 8}" y="${y(fundo) - 4}" font-size="11">${fmt(fundo, 2)}</text>`); }
+    p.push(`<text x="${xD + wD / 2}" y="${y(fundo) + 27}" font-size="14.5" text-anchor="middle" font-family="Calibri, Carlito, Arial, sans-serif">Limite de Sondagem</text>`);
+  }
+  // nível d'água
+  if (so.naSeco) p.push(`<text x="${xN + wN / 2}" y="${y(0) + 22}" font-size="13" text-anchor="middle">SECO</text>`);
+  else if (ehNumero(so.na)) p.push(`<path d="M${xN + wN / 2 - 6} ${y(so.na) - 9}h12l-6 9z" fill="#000"/><line x1="${xN + 8}" x2="${xN + wN - 8}" y1="${y(so.na)}" y2="${y(so.na)}" stroke="#000"/>
+      <text x="${xN + wN / 2}" y="${y(so.na) + 12}" font-size="9" text-anchor="middle">${fmt(so.na, 2)}</text>`);
+  const col = x => `<line x1="${x}" x2="${x}" y1="0" y2="${H}" stroke="#000" stroke-width=".9"/>`;
+  return `<svg class="perfil" viewBox="0 0 ${W} ${H}">${DEF_HACHURAS}${col(xH)}${col(xD)}${col(xN)}${p.join('')}</svg>`;
 }
 
 async function htmlBoletins(pl, pontos) {
   const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
-  const M = (typeof MARCA === 'object' && MARCA) || {};
+  const M = (typeof MARCA === 'object' && MARCA) || {}, S = M.slab || {};
+  const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
+  const responsavel = S.responsavel || M.responsavel || '', crea = S.crea || M.crea || '';
+  const partesOs = String(pl.os || '').split('/').map(x => x.trim()).filter(Boolean);
+  const prefixo = partesOs.length > 1 ? partesOs[0] : '', ordem = partesOs.length > 1 ? partesOs.slice(1).join(' / ') : (partesOs[0] || '');
+  // caixa marcada desenhada (fundo de cor não sai na impressão sem "gráficos de fundo")
+  const caixa = v => `<svg class="cx" viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="${v ? '#000' : '#fff'}" stroke="#000"/></svg>`;
   const folhas = [];
   for (const p of pontos) {
-    const so = sondagemDe(p), g = geoDoPonto(p), e = ensaioDoPonto(p, pl), r = (e && e.resumo) || {};
+    const so = sondagemDe(p), g = geoDoPonto(p);
     const camadas = (so.camadas || []).filter(c => ehNumero(c.de) && ehNumero(c.ate)).sort((a, b) => a.de - b.de);
-    const profMax = Math.max(ehNumero(so.prof) ? so.prof : 0, ehNumero(p.prof) ? p.prof : 0, ...camadas.map(c => c.ate), 0.5);
+    const prof = ehNumero(so.prof) ? so.prof : (camadas.length ? camadas[camadas.length - 1].ate : p.prof);
+    const terreno = so.terreno || (so.naSeco ? 'seco' : '');
     const fotos = [];
-    for (const f of (so.fotos || []).slice(0, 4)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
-    const parada = (PARADAS.find(x => x[0] === so.parada) || ['', ''])[1];
-    const linha = (k, v) => `<tr><th>${k}</th><td>${v || '—'}</td></tr>`;
-    const marcaH = x => x ? `${horaBr(x.em)}${ehNumero(x.dist) ? ` (a ${x.dist} m)` : ''}` : '';
-    const aprovado = e && situacaoDe(e) === 'aprovado';
+    for (const f of (so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
+    const folhaTxt = fotos.length ? '1/2' : 'Única';
+    const outras = [`km ${kmTexto(p.km)}`, p.registro ? `amostra ${p.registro}` : '',
+      so.fim ? `furo concluído às ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` (GPS a ${so.fim.dist} m do ponto)` : ''}` : ''].filter(Boolean).join(' · ');
     folhas.push(`<section class="folha">
-      <header>${logo ? `<img src="${logo}" alt="">` : ''}<div><h1>BOLETIM DE SONDAGEM A TRADO</h1>
-        <div class="sub">${[pl.cliente, pl.obra, pl.os].filter(Boolean).map(atr).join(' · ')}</div></div>
-        <div class="st">${atr(p.st)}<small>${atr(p.registro || '')}</small></div></header>
-      <div class="cols">
-        <table class="dados">${linha('Plano', `${atr(pl.codigo)} — ${atr(pl.nome || '')}`)}${linha('Rodovia / trecho', `${atr(pl.rodovia || '')} · ${atr(p.trecho || '')}`)}
-          ${linha('km', kmTexto(p.km))}${linha('Coordenadas (UTM)', `N ${fmt(p.norte, 3)} · E ${fmt(p.este, 3)} · fuso ${pl.fuso || 20}${pl.hemisferio || 'S'}`)}
-          ${linha('Latitude / longitude', g ? `${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}` : '')}${linha('Data', so.data ? dataBrSl(so.data) : '')}
-          ${linha('Equipe / sondador', atr(so.equipe || ''))}${linha('Chegada · início · fim', [marcaH(so.chegada), marcaH(so.inicio), marcaH(so.fim)].map(x => x || '—').join(' · '))}</table>
-        <table class="dados">${linha('Profundidade pedida', ehNumero(p.prof) ? fmt(p.prof, 2) + ' m' : '')}${linha('Profundidade atingida', ehNumero(so.prof) ? fmt(so.prof, 2) + ' m' : '')}
-          ${linha('Nível d\'água', so.naSeco ? 'Não encontrado (furo seco)' : ehNumero(so.na) ? fmt(so.na, 2) + ' m' : '')}${linha('Motivo da parada', parada)}
-          ${linha('Amostra (laboratório)', p.registro ? `${atr(p.registro)} · 0,00 a ${fmt(ehNumero(so.prof) ? so.prof : p.prof, 2)} m` : '')}
-          ${linha('Resultados', aprovado ? [r.hrb && 'HRB ' + r.hrb, r.sucs && 'SUCS ' + r.sucs, ehNumero(r.cbr) && 'ISC ' + fmt(r.cbr, 1) + ' %', ehNumero(r.ll) && 'LL ' + fmt(r.ll, 0), ehNumero(r.ip) && 'IP ' + fmt(r.ip, 0)].filter(Boolean).join(' · ') : (e ? 'em ensaio' : ''))}
-          ${linha('Observação', atr(so.obs || ''))}</table>
-      </div>
-      <div class="perfil">${svgPerfil(camadas, profMax, p.registro ? { de: 0, ate: ehNumero(so.prof) ? so.prof : p.prof, reg: p.registro } : null)}
-        <table class="camadas"><tr><th>De (m)</th><th>Até (m)</th><th>Descrição tátil-visual</th></tr>
-          ${camadas.map(c => `<tr><td>${fmt(c.de, 2)}</td><td>${fmt(c.ate, 2)}</td><td class="e">${atr(descCamada(c))}</td></tr>`).join('') || '<tr><td colspan="3">Camadas não descritas.</td></tr>'}</table></div>
-      ${fotos.length ? `<div class="fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]} · ${dataHoraBr(f.em)}</figcaption></figure>`).join('')}</div>` : ''}
-      <footer><div>Sondador: ${atr(so.equipe || '')}</div><div>${atr(M.responsavel || 'Responsável técnico')}${M.crea ? ' · ' + atr(M.crea) : ''}</div></footer>
+      <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td>
+        <td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
+      <div class="titulo">BOLETIM INDIVIDUAL DE SONDAGEM À TRADO - NBR 9603</div>
+      <table class="id">
+        <tr><td class="r">Cliente:</td><td class="v" colspan="3">${atr(pl.cliente || '')}</td><td class="r">Data de Execução:</td><td class="v d">${so.data ? dataBrSl(so.data) : ''}</td></tr>
+        <tr><td class="r">Obra:</td><td class="v" colspan="3">${atr(pl.obra || pl.nome || '')}</td><td class="r">Nº Ordem de Serv.:</td><td class="v d">${atr(ordem)}</td></tr>
+        <tr><td class="r">Local:</td><td class="v" colspan="3">${atr(pl.rodovia || p.localizacao || '')}</td><td class="r">Prefixo da Obra:</td><td class="v d">${atr(prefixo)}</td></tr>
+        <tr><td class="r">Sondador:</td><td class="v">${atr(so.equipe || '')}</td><td class="r dir">Profundidade do Furo (m):</td><td class="v">${ehNumero(prof) ? fmt(prof, 2) : ''}</td>
+          <td class="r">Estaca:</td><td class="v d st">${atr(p.st)}</td></tr>
+      </table>
+      <table class="amb"><tr>
+        <td class="w1"><span class="r">Relevo:</span><b>${atr((so.relevo || '').toUpperCase())}</b></td>
+        <td class="w2"><span class="r">Vegetação:</span><b>${atr((so.vegetacao || '').toUpperCase())}</b></td>
+        <td class="w3"><span class="r">Terreno:</span><span class="terr"><i>Seco<br>${caixa(terreno === 'seco')}</i><i>Úmido<br>${caixa(terreno === 'umido')}</i><i>Alagado<br>${caixa(terreno === 'alagado')}</i></span></td></tr></table>
+      <div class="outras"><span class="r">Outras Informações:</span> ${atr(outras)}</div>
+      <table class="cabperfil"><tr><td class="c1">Prof. (m)</td><td class="c2">Hachura</td><td class="c3">Descrição e Classificação Expedita dos Solos</td><td class="c4">Nível<br>d'água</td></tr></table>
+      ${svgPerfilBoletim(camadas, prof, so)}
+      <table class="rod">
+        <tr><td colspan="5" class="t">Nível d'água</td><td colspan="2" class="t">Furo paralisado por:</td><td class="t">Cota (m)</td></tr>
+        <tr><td class="r">Prof. NA (m)</td><td class="c">${so.naSeco ? 'SECO' : ehNumero(so.na) ? fmt(so.na, 2) : ''}</td><td></td><td></td><td></td>
+          <td class="ck">${caixa(so.parada === 'plano')} Atingir Prof. do Projeto</td><td class="ck">${caixa(so.parada === 'impenetravel')} Terreno Resistente</td>
+          <td class="c" rowspan="3">${ehNumero(so.cota) ? fmt(so.cota, 3) : '-'}</td></tr>
+        <tr><td class="r">Hora:</td><td class="c">${!so.naSeco && ehNumero(so.na) && so.fim ? horaBr(so.fim.em) : ''}</td><td></td><td></td><td></td>
+          <td class="ck">${caixa(so.parada === 'rocha')} Estrato Rochoso</td><td class="ck">${caixa(so.parada === 'agua')} Lençol Freático</td></tr>
+        <tr><td class="r">Data:</td><td class="c pq">${so.data ? dataBrSl(so.data) : ''}</td><td></td><td></td><td></td>
+          <td class="ck" colspan="2">${caixa(so.parada === 'desmoronamento')} Desmoronamento das paredes${so.parada === 'outro' ? ' &nbsp; ' + caixa(true) + ' Outro (ver observações)' : ''}</td></tr>
+      </table>
+      <table class="coord">
+        <tr><td colspan="4" class="t">Coordenadas (m)</td><td class="apr" rowspan="3"><span class="r">Aprovado:</span>
+          <div class="ass">${atr(responsavel)}<br>${atr(crea)}</div></td></tr>
+        <tr><td colspan="2" class="t">N</td><td class="t">E</td><td class="t">Fuso</td></tr>
+        <tr><td colspan="2" class="c">${fmt(p.norte, 3)}</td><td class="c">${fmt(p.este, 3)}</td><td class="c">${zonaUtm(pl, g)}</td></tr>
+        <tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td colspan="3" class="obs"><span class="r">Observações:</span> ${atr(so.obs || '')}</td><td></td></tr>
+      </table>
+    </section>`);
+    if (fotos.length) folhas.push(`<section class="folha fotos-folha">
+      <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
+      <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(p.st)} · ${atr(pl.cliente || '')}</div>
+      <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${f.dist} m do ponto` : ''}</figcaption></figure>`).join('')}</div>
+      <table class="coord"><tr><td class="r fl">Folha:<br><span>2/2</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
     </section>`);
   }
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Boletins de sondagem — plano ${atr(pl.codigo)}</title><style>
-    @page{size:A4;margin:9mm} body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;margin:0}
-    .folha{break-after:page;min-height:270mm;display:flex;flex-direction:column;gap:3mm}
+    @page{size:A4;margin:7mm 8mm} *{box-sizing:border-box}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:8.6pt;color:#000;margin:0}
+    .folha{border:.5mm solid #000;display:flex;flex-direction:column;break-after:page;overflow:hidden} .fotos-folha{height:282mm}
     .folha:last-child{break-after:auto}
-    header{display:flex;align-items:center;gap:5mm;border-bottom:.8mm solid #000;padding-bottom:2mm} header img{height:13mm}
-    header h1{font-size:13pt;margin:0} header .sub{font-size:8pt} header .st{margin-left:auto;font-size:16pt;font-weight:700;text-align:right}
-    header .st small{display:block;font-size:8pt;font-weight:400}
-    .cols{display:grid;grid-template-columns:1fr 1fr;gap:3mm} table{border-collapse:collapse;width:100%}
-    .dados th,.dados td,.camadas th,.camadas td{border:.3mm solid #777;padding:.8mm 1.4mm;text-align:left;vertical-align:top}
-    .dados th{width:34%;background:#eee;font-weight:600} .camadas th{background:#eee} .camadas td{text-align:center} .camadas td.e{text-align:left}
-    .perfil{display:flex;gap:4mm;align-items:flex-start} .perfil .camadas{flex:1}
-    .fotos{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm} .fotos img{width:100%;height:34mm;object-fit:cover;border:.3mm solid #777}
-    figure{margin:0} figcaption{font-size:6.5pt}
-    footer{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:10mm;padding-top:12mm}
-    footer div{border-top:.3mm solid #000;text-align:center;padding-top:1mm}
+    table{border-collapse:collapse;width:100%} td{padding:.6mm 1.2mm;vertical-align:middle}
+    .cab td{height:20mm;border-bottom:.35mm solid #000} .cab .logo{width:50%;padding-left:6mm} .cab .logo img{height:14mm}
+    .cab .end{text-align:center;font-size:7.6pt;line-height:1.35;padding-right:6mm}
+    .titulo{text-align:center;font-weight:700;font-size:11pt;padding:1.6mm 0;border-bottom:.35mm solid #000}
+    .r{font-weight:400} .v{font-weight:700} .d{text-align:right} .dir{text-align:right}
+    .id td{padding:.9mm 1.2mm} .id td:first-child{width:15mm} .id .st{font-size:13pt}
+    .amb{border-top:.35mm solid #000;border-bottom:.35mm solid #000} .amb td{border-right:.35mm solid #000;vertical-align:top;height:11mm}
+    .amb td:last-child{border-right:0} .amb .w1{width:43%} .amb .w2{width:28%} .amb b{display:inline-block;margin:2.2mm 0 0 3mm}
+    .amb .w1 .r,.amb .w2 .r,.amb .w3 .r{display:inline-block;vertical-align:top}
+    .terr{display:inline-flex;gap:0;float:right;width:72%} .terr i{font-style:normal;flex:1;text-align:center;line-height:1.5}
+    .cx{display:inline-block;width:3.6mm;height:3.6mm;vertical-align:middle}
+    .outras{padding:.8mm 1.2mm;border-bottom:.35mm solid #000;font-size:8pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cabperfil td{border-right:.35mm solid #000;border-bottom:.35mm solid #000;text-align:center;height:9mm}
+    .cabperfil td:last-child{border-right:0} .cabperfil .c1{width:8.857%} .cabperfil .c2{width:9.143%} .cabperfil .c4{width:8.43%}
+    svg.perfil{display:block;flex:none;width:100%;height:auto;border-bottom:.35mm solid #000}
+    .rod td,.coord td{border:.3mm solid #000;font-size:8pt;height:4.6mm} .rod tr:first-child td,.coord tr:first-child td{border-top:0}
+    .rod td:first-child,.coord td:first-child{border-left:0} .rod td:last-child,.coord td:last-child{border-right:0}
+    .rod .t,.coord .t{text-align:center} .rod .c,.coord .c{text-align:center} .rod .r{width:16mm;white-space:nowrap;font-size:7.2pt} .rod .pq{font-size:6.8pt}
+    .rod .ck{border-left:.3mm solid #000;border-right:0;border-top:0;border-bottom:0;padding-left:1.2mm;white-space:nowrap}
+    .rod tr:last-child .ck{border-bottom:.3mm solid #000}
+    .rod td:nth-child(n+3):nth-child(-n+5){width:12mm}
+    .coord .apr{width:38%;vertical-align:top;border-right:0} .coord .ass{text-align:center;margin-top:7mm;font-size:8pt;line-height:1.35}
+    .coord .fl{vertical-align:top;height:10mm;width:15mm} .coord .fl span{display:block;text-align:center;font-size:9pt;margin-top:1mm}
+    .coord .obs{vertical-align:top}
+    .grade-fotos{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3, minmax(0, 1fr));gap:3mm;padding:3mm;min-height:0}
+    .grade-fotos figure{margin:0;display:flex;flex-direction:column;min-height:0} .grade-fotos img{flex:1;min-height:0;width:100%;object-fit:contain;object-position:left top}
+    .grade-fotos figcaption{font-size:7pt;padding-top:1mm}
   </style></head><body>${folhas.join('')}</body></html>`;
 }
 
