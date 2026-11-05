@@ -679,6 +679,7 @@ tr.marco td:first-child::after{content:" ●"; color:var(--accent); font-size:8p
 /* São 72 cilindros e 144 cápsulas. Tudo aberto ao mesmo tempo eram centenas de
    fichas para rolar até chegar no frasco. Cada grupo abre e fecha; fechados,
    a aba inteira cabe numa tela. */
+.grupo-equip[hidden]{display:none !important;}
 .grupo-equip{border:1px solid var(--border); border-radius:var(--radius-sm);
   margin-bottom:9px; background:color-mix(in srgb,var(--card) 97%, var(--bg));}
 .grupo-equip:last-of-type{margin-bottom:0;}
@@ -2317,6 +2318,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
       diâmetro e da altura; a <b>tara da cápsula</b> passa a ser puxada daqui em vez de
       digitada em cada ensaio.
     </p>
+
+    <div class="grupo-equip" data-grupo="calibSlab" hidden>
+      <button type="button" class="cab-grupo" data-eqabre="calibSlab">
+        <span class="seta" aria-hidden="true">›</span>
+        <span class="nome">Calibrações do laboratório de solos (prensas, densímetro, picnômetros)</span>
+        <span class="conta"></span>
+      </button>
+      <div class="corpo-grupo"><div id="slCalib"></div></div>
+    </div>
 
     <div class="grupo-equip" data-grupo="projcauq">
       <button type="button" class="cab-grupo" data-eqabre="projcauq">
@@ -12340,9 +12350,11 @@ function camposDaFicha(f) {
  * exemplo/teste: { valores: { caminho: 'texto' }, cab: { registro, furo, data, laboratorista }, css }.
  */
 function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
+  // impresso = os dados que se repetem já vêm na ficha (letra de máquina); senão é o kit de teste (letra de mão)
+  const cls = preenchido && preenchido.impresso ? 'pre' : 'mao';
   const V = c => (preenchido && preenchido.valores[c] !== undefined && preenchido.valores[c] !== null)
-    ? `<span class="mao">${atr(preenchido.valores[c])}</span>` : '';
-  const CB = k => preenchido && preenchido.cab && preenchido.cab[k] ? `<span class="mao">${atr(preenchido.cab[k])}</span>` : '';
+    ? `<span class="${cls}">${atr(preenchido.valores[c])}</span>` : '';
+  const CB = k => preenchido && preenchido.cab && preenchido.cab[k] ? `<span class="${cls}">${atr(preenchido.cab[k])}</span>` : '';
   const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
   const umBloco = (f, b) => {
       const selo = '<em class="tag-conta">conta</em>';
@@ -12402,6 +12414,8 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   .idt{display:grid;grid-template-columns:1fr 1fr 1.3fr 1.6fr;gap:3mm;margin:4mm 0 2mm}
   .idt span,.c span{display:block;font-size:10pt;font-weight:700;margin-bottom:1mm}
   .q{height:11mm;border:0.5mm solid #000;border-radius:1mm}
+  .q .pre{display:block;padding:1.6mm 2mm 0;font:700 11pt/1.2 Arial,Helvetica,sans-serif;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  td .pre{display:block;text-align:center;font:700 10pt Arial,Helvetica,sans-serif}
   .q.data{display:flex;align-items:flex-end;justify-content:space-around;font-size:7pt;color:#888;padding-bottom:0.6mm}
   .q.data i{font-style:normal}
   .reg{font-size:9pt;margin:2mm 0 1mm;padding:2mm;border:0.3mm dashed #000}
@@ -12426,8 +12440,30 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   </style></head><body>${abas.map(a => fichaDaAba(a)).filter(Boolean).map(pagina).join('')}</body></html>`;
 }
 
-function abrirFichasRascunho(abas) {
-  const html = htmlFichasRascunho(abas);
+/**
+ * O que se repete em todos os furos (cliente, OS, obra, laboratorista, energia, prensa…) sai impresso
+ * na ficha, tirado da tela: a equipe só escreve o que muda. Cada ficha diz o que repete (repete / repeteCab).
+ */
+function valoresRepetidos(abas) {
+  const valores = {}, cab = {};
+  (abas || []).forEach(a => {
+    const f = fichaDaAba(a); if (!f) return;
+    const rep = new Set(f.repete || []);
+    if (rep.size) camposDaFicha(f).filter(l => rep.has(l.caminho)).forEach(l => {
+      let v = null;
+      try { const el = l.sel && document.querySelector(l.sel); v = el && el.tagName === 'SELECT' ? el.value : lerCampo(l); } catch (e) {}   // escolha: o código (prensa "3"), não o texto
+      if (v !== null && v !== undefined && String(v).trim() !== '') valores[l.caminho] = String(v).toUpperCase();
+    });
+    cabDaFicha(f).filter(c => (f.repeteCab || []).includes(c[1])).forEach(([, k, , , sel]) => {
+      const el = sel && document.querySelector(sel);
+      if (el && String(el.value || '').trim()) cab[k] = String(el.value).toUpperCase();
+    });
+  });
+  return Object.keys(valores).length || Object.keys(cab).length ? { valores, cab, impresso: true } : null;
+}
+
+function abrirFichasRascunho(abas = fichasDoModo()) {
+  const html = htmlFichasRascunho(abas, valoresRepetidos(abas));
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (w) setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 900);
@@ -12777,7 +12813,7 @@ function cartaoRascunho(aba) {
     <div class="rasc-botoes">
       <label class="btn"><input type="file" accept="image/*" capture="environment" data-rascfoto="${aba}" hidden>📷 Fotografar</label>
       <label class="btn ghost"><input type="file" accept="image/*,application/pdf" multiple data-rascfoto="${aba}" hidden>Escolher foto ou PDF</label>
-      <button class="btn ghost" type="button" data-rascficha="${aba}">Imprimir ficha em branco</button>
+      <button class="btn ghost" type="button" data-rascficha="${aba}">Imprimir ficha${f.repete || f.repeteCab ? ' (com os dados da obra)' : ' em branco'}</button>
       ${f.modo === 'csond' ? '' : `<button class="btn ghost" type="button" data-rascfichas="1">Todas as fichas deste ensaio</button>`}
     </div>
     <div id="rascAviso-${aba}"></div>
@@ -12860,6 +12896,7 @@ const NOME_PDF_ABA_CS = { csident: 'o laudo completo (todas as folhas)', csproct
 const ABAS_COM_SALVAR = ['m31granul', 'm31rice', 'm31marshall', 'm31rtd', 'm31dens', 'm31agran',
   'slident', 'slbol', 'slgranul', 'slsed', 'sllim', 'slcomp', 'slcbr'];
 const ABAS_LAUDO_INTEIRO = ['csident', 'slident'];
+const ABAS_SO_SALVAR = ['slident'];
 
 function voltarRelatorioInteiro() { if (FOLHAS_SO) { FOLHAS_SO = null; atualizar(); } }
 
@@ -12875,6 +12912,20 @@ function gerarPdfDaAba(aba) {
 function montarBotoesPdfAba() {
   document.querySelectorAll('[data-pdfslot]').forEach(el => {
     const aba = el.dataset.pdfslot;
+    // Identificação do ensaio de solos: só salvar (o PDF de cada parte sai na aba dela; o completo, no Histórico e no plano)
+    if (ABAS_SO_SALVAR.includes(aba)) {
+      el.innerHTML = `<div class="card pdf-aba"><h2>Salvar ensaio</h2>
+        <p class="hint" style="margin:0 0 12px">Guarda o ensaio e manda para a equipe. O PDF sai na aba de cada parte (Boletim, Granulometria…) e o completo no Histórico.</p>
+        <div class="rasc-botoes"><button class="btn" type="button" data-salvaraba="1">Salvar ensaio</button></div>
+        <div data-salvoaba="1" style="margin-top:10px"></div><div data-aprovaba="1"></div></div>`;
+      el.querySelector('[data-salvaraba]').addEventListener('click', () => {
+        salvarEnsaio();
+        const aviso = el.querySelector('[data-salvoaba]'), msg = $('salvoAviso');
+        if (aviso && msg) aviso.innerHTML = msg.innerHTML;
+        desenharAprovacaoNasAbas();
+      });
+      return;
+    }
     el.innerHTML = `<div class="card pdf-aba"><h2>PDF ${ABAS_LAUDO_INTEIRO.includes(aba) ? 'do laudo' : 'desta aba'} <span class="tag">${ABAS_LAUDO_INTEIRO.includes(aba) ? 'todas as folhas' : 'só esta parte'}</span></h2>
       <p class="hint" style="margin:0 0 12px">Gera ${NOME_PDF_ABA_CS[aba]}${ABAS_LAUDO_INTEIRO.includes(aba) ? '' : ', com cabeçalho e assinaturas, sem esperar o resto do ensaio'}.
         Na janela de impressão, escolha <b>Salvar como PDF</b>.</p>
@@ -13535,7 +13586,7 @@ function calcularSlabTela() {
 
 function atualizarSlab() {
   if (!estado.slab) estado.slab = novoSlab();
-  // ensaio de antes do campo "Prefixo da obra": o "NE-2290 / OS 329" de um campo só vira os dois
+  // ensaio de antes do campo "Prefixo da obra": o "NE-0000 / OS 000" de um campo só vira os dois
   const id = estado.slab.ident;
   if (id && !id.prefixo && /\//.test(id.os || '')) { const [a, ...b] = id.os.split('/'); id.prefixo = a.trim(); id.os = b.join('/').trim(); }
   // ensaio ligado ao plano: registro e ST sempre os do ponto
@@ -13566,6 +13617,13 @@ const putSl = (id, html) => { const e = $(id); if (e) e.innerHTML = html; };
 const ENERGIAS_SL = [['NORMAL', 'Normal'], ['INTERMEDIÁRIA', 'Intermediária'], ['MODIFICADA', 'Modificada']];
 const P5SL = [0, 1, 2, 3, 4];
 
+/* "Dados da obra" na Identificação: recolhidos depois de preenchidos (tela limpa); o resumo fica no título */
+let SL_OBRA_ABERTA = false;
+function resumoObraSl() {
+  const id = (estado.slab || {}).ident || {};
+  return [id.cliente, [id.prefixo, id.os].filter(Boolean).join(' / '), estado.medicao.obra].filter(Boolean).join(' · ');
+}
+
 function montarSlab() {
   const s = estado.slab;
   if (!s || !$('slIdent')) return;
@@ -13587,47 +13645,27 @@ function montarSlab() {
               opcoesPontosDoPlano((s.plano || {}).pontoId)}</select></div>`
           : `<div><label>PI cadastrado</label><select id="slPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI em Dados gerais'}</option>${
           listaPis().map(p => `<option value="${atr(p.numero)}"${acharPi(m.furo) === p ? ' selected' : ''}>PI ${atr(p.numero)}${ehNumero(p.km) ? ' · km ' + fmt(p.km, 3) : ''}</option>`).join('')}</select></div>`}
-        <div><label>Prefixo da obra</label>${tSl('ident.prefixo', 'Ex.: NE-2290')}</div>
-        <div><label>Nº Ordem de Serviço</label>${tSl('ident.os', 'Ex.: OS 329')}</div>
-        <div style="grid-column:span 2"><label>Cliente</label>${tSl('ident.cliente')}</div>
-        <div style="grid-column:span 2">${cabSl('obra', 'Obra').replace(/^<div>|<\/div>$/g, '')}</div>
-        <div style="grid-column:span 2"><label>Estudo</label>${tSl('ident.estudo', 'Ex.: ESTUDO DO SUBLEITO')}</div>
         ${cabSl('camada', 'Camada', 'text', 'Ex.: 0,00 a 1,50 m', false)}
         <div><label>Local</label>${tSl('ident.local', 'Ex.: KM 123+450 BR-000/UF')}</div>
-        <div style="grid-column:span 2"><label>Laboratoristas (folha)</label>${tSl('ident.laboratoristas', (cfg.laboratoristas || '').replace(/\n/g, ' · '), false)}</div>
         ${cabSl('laboratorista', 'Laboratorista que lançou')}
-        ${cabSl('engenheiro', 'Resp. técnico', 'text', cfg.responsavel || '')}
       </div>
+      <details class="sl-obra" data-slobra="1"${SL_OBRA_ABERTA || !resumoObraSl() ? ' open' : ''}>
+        <summary><b>Dados da obra</b><span class="hint">${atr(resumoObraSl() || 'a preencher')}</span></summary>
+        <p class="hint" style="margin:6px 0 8px">Os mesmos em todos os furos${s.plano ? ' — vêm dos <b>dados gerais do plano</b> (aba Planos)' : ''}.</p>
+        <div class="grid4">
+          <div><label>Prefixo da obra</label>${tSl('ident.prefixo', 'Ex.: NE-0000')}</div>
+          <div><label>Nº Ordem de Serviço</label>${tSl('ident.os', 'Ex.: OS 000')}</div>
+          <div style="grid-column:span 2"><label>Cliente</label>${tSl('ident.cliente')}</div>
+          <div style="grid-column:span 2">${cabSl('obra', 'Obra').replace(/^<div>|<\/div>$/g, '')}</div>
+          <div style="grid-column:span 2"><label>Estudo</label>${tSl('ident.estudo', 'Ex.: ESTUDO DO SUBLEITO')}</div>
+          <div style="grid-column:span 2"><label>Laboratoristas (folha)</label>${tSl('ident.laboratoristas', (cfg.laboratoristas || '').replace(/\n/g, ' · '), false)}</div>
+          ${cabSl('engenheiro', 'Resp. técnico', 'text', cfg.responsavel || '')}
+        </div>
+      </details>
       ${typeof usaPlanos === 'function' && usaPlanos() ? `<p class="hint" style="margin:10px 0 0">Escolha o <b>ST</b>: o registro (número do laboratório) e o cabeçalho vêm do plano de sondagem.</p>` : ''}
       <div id="slPontoAviso"></div>
-    </div>
-    <div class="card">
-      <h2>Fichas de rascunho <span class="tag">${FICHAS_SLAB.length} folhas A4</span></h2>
-      <p class="hint" style="margin:0 0 12px">O jogo em branco para a bancada: só o que se anota. Depois fotografe cada ficha na aba dela e toque em <b>Ler rascunho</b>.</p>
-      <button class="btn" type="button" id="btnFichasSlab">Imprimir fichas em branco</button>
-    </div>
-    <details class="card">
-      <summary><h2>Calibrações do laboratório <span class="tag">toque para abrir</span></h2></summary>
-      <p class="hint">Prensas de ISC, picnômetros e densímetro. Cilindros e cápsulas ficam no cadastro de equipamentos (Dados gerais).
-        Ajuste e toque em <b>Guardar calibrações</b> — vale para os próximos ensaios deste aparelho.</p>
-      <h3 class="sub-card">Prensas de ISC</h3>
-      <div class="tabwrap"><table class="t-form"><thead><tr><th>Nº</th><th>Nome</th><th>K anel (kgf/cm²·div)</th></tr></thead><tbody>
-        ${(cfg.prensas || []).map((p, i) => `<tr><td data-rot="Nº">${tSl(`cfg.prensas.${i}.numero`)}</td>
-          <td data-rot="Nome">${tSl(`cfg.prensas.${i}.nome`)}</td><td data-rot="K">${nSl(`cfg.prensas.${i}.k`, '0.00001')}</td></tr>`).join('')}
-      </tbody></table></div>
-      <h3 class="sub-card">Densímetro · Z = a − b × leitura</h3>
-      <div class="grid4">
-        <div><label>b</label>${nSl('cfg.densimetro.b', '0.01')}</div>
-        <div><label>a (leituras iniciais)</label>${nSl('cfg.densimetro.a1', '0.01')}</div>
-        <div><label>a (demais leituras)</label>${nSl('cfg.densimetro.a2', '0.01')}</div>
-        <div><label>Leituras iniciais</label>${nSl('cfg.densimetro.nIniciais', '1')}</div>
-        <div><label>Altura do CP do ISC (mm)</label>${nSl('cfg.alturaCp', '0.1')}</div>
-      </div>
-      <div style="margin-top:12px"><label>Picnômetros — nº; peso vazio (g); peso com água (g), um por linha</label>
-        <textarea id="slPicTxt" rows="6">${(cfg.picnometros || []).map(p => `${p.numero}; ${p.vazio}; ${p.comAgua}`).join('\n')}</textarea></div>
-      <button class="btn" type="button" id="btnGuardarCfgSl" style="margin-top:12px">Guardar calibrações</button>
-      <div id="slCfgAviso"></div>
-    </details>`;
+    </div>`;
+
 
   /* ---------- GRANULOMETRIA ---------- */
   const G = SLAB.PENEIRAS_GROSSO, F = SLAB.PENEIRAS_FINO;
@@ -13856,7 +13894,34 @@ function montarSlab() {
       <div class="sl-graf-par"><div class="sl-graf" id="slGrafCbr"></div><div class="sl-graf" id="slGrafExp"></div></div>
     </div>`;
   if ($('slBol') && typeof htmlAbaBoletimSlab === 'function') $('slBol').innerHTML = htmlAbaBoletimSlab();
+  // calibrações do laboratório de solos: ficam em Dados gerais (não mudam de um ensaio para o outro)
+  const gCal = document.querySelector('[data-grupo="calibSlab"]');
+  if (gCal) gCal.hidden = !(MODOS_DA_FAMILIA.solos || []).includes('slab');
+  if ($('slCalib')) $('slCalib').innerHTML = `
+      <p class="hint" style="margin:0 0 10px">Prensas de ISC, picnômetros e densímetro do ensaio de solos de laboratório. Cilindros e cápsulas ficam nos grupos abaixo.
+        Ajuste e toque em <b>Guardar calibrações</b> — vale para os próximos ensaios deste aparelho.</p>
+      <h3 class="sub-card">Prensas de ISC</h3>
+      <div class="tabwrap"><table class="t-form"><thead><tr><th>Nº</th><th>Nome</th><th>K anel (kgf/cm²·div)</th></tr></thead><tbody>
+        ${(cfg.prensas || []).map((p, i) => `<tr><td data-rot="Nº">${tSl(`cfg.prensas.${i}.numero`)}</td>
+          <td data-rot="Nome">${tSl(`cfg.prensas.${i}.nome`)}</td><td data-rot="K">${nSl(`cfg.prensas.${i}.k`, '0.00001')}</td></tr>`).join('')}
+      </tbody></table></div>
+      <h3 class="sub-card">Densímetro · Z = a − b × leitura</h3>
+      <div class="grid4">
+        <div><label>b</label>${nSl('cfg.densimetro.b', '0.01')}</div>
+        <div><label>a (leituras iniciais)</label>${nSl('cfg.densimetro.a1', '0.01')}</div>
+        <div><label>a (demais leituras)</label>${nSl('cfg.densimetro.a2', '0.01')}</div>
+        <div><label>Leituras iniciais</label>${nSl('cfg.densimetro.nIniciais', '1')}</div>
+        <div><label>Altura do CP do ISC (mm)</label>${nSl('cfg.alturaCp', '0.1')}</div>
+      </div>
+      <div style="margin-top:12px"><label>Picnômetros — nº; peso vazio (g); peso com água (g), um por linha</label>
+        <textarea id="slPicTxt" rows="6">${(cfg.picnometros || []).map(p => `${p.numero}; ${p.vazio}; ${p.comAgua}`).join('\n')}</textarea></div>
+      <button class="btn" type="button" id="btnGuardarCfgSl" style="margin-top:12px">Guardar calibrações</button>
+      <div id="slCfgAviso"></div>`;
+
   ligarSlab();
+  const ob = document.querySelector('[data-slobra]');
+  // só o toque da pessoa conta (o "aberto" automático de quando falta dado não fica lembrado)
+  if (ob) ob.querySelector('summary').addEventListener('click', () => { SL_OBRA_ABERTA = !ob.open; });
   if (typeof ligarAbaBoletimSlab === 'function') ligarAbaBoletimSlab();
 }
 
@@ -14336,6 +14401,8 @@ const SIGLA_SL = (typeof MARCA !== 'undefined' && MARCA.siglaFichas) || 'RASC';
 
 const FICHAS_SLAB = [
   { aba: 'slident', modo: 'slab', codigo: SIGLA_SL + '-L1', titulo: 'Solos (laboratório) — identificação', primeira: true, cabs: CAB_SL,
+    // impressas já com o que se repete em todos os furos (vem da tela): só o que muda fica para a mão
+    repete: ['cliente', 'prefixo', 'os', 'obra', 'estudo', 'labs'], repeteCab: ['laboratorista'],
     blocos: [{ tipo: 'campos', titulo: 'Identificação do ensaio', campos: [
       fAt('Cliente', 'cliente', _sl('ident.cliente'), 'texto', 2), fAt('Prefixo da obra', 'prefixo', _sl('ident.prefixo'), 'texto'),
       fAt('Nº Ordem de Serviço', 'os', _sl('ident.os'), 'texto'),
@@ -14343,7 +14410,7 @@ const FICHAS_SLAB = [
       fAt('Camada (profundidade)', 'camada', _slc('camada'), 'texto'), fAt('Local', 'local', _sl('ident.local'), 'texto', 2),
       fAt('Laboratoristas', 'labs', _sl('ident.laboratoristas'), 'texto', 2)] }] },
   // boletim de sondagem à trado (NBR 9603): a ficha que vai para o campo — as escolhas vêm escritas no rótulo
-  { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)',
+  { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)', repeteCab: ['sondador'],
     cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]],
     blocos: [
       { tipo: 'campos', titulo: 'Furo', campos: [fAt('Data de execução', 'bolData', _sl('bol.data'), 'data'),
@@ -14361,7 +14428,7 @@ const FICHAS_SLAB = [
         linhas: [0, 1, 2, 3, 4, 5].map(k => [`Camada ${k + 1}`, c => `bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`, 'num', '',
           c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`)]) },
     ] },
-  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
+  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, repete: ['parcial'], repeteCab: ['laboratorista'], titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Amostra', campos: [fAt('Data de execução', 'data', _slc('dataEnsaio'), 'data'),
         fAt('Amostra total seca ao ar (g)', 'totalAr', _sl('totalAr')), fAt('Amostra parcial úmida (g)', 'parcial', _sl('parcialUmida'))] },
@@ -14373,7 +14440,7 @@ const FICHAS_SLAB = [
       { tipo: 'grade', par: true, titulo: 'Peneiramento fino — retido (g)', colunas: ['Retido (g)'], idx: [0],
         linhas: SLAB.PENEIRAS_FINO.map((p, k) => [`${p[0]} · ${p[1]}`, () => `finos.${k}`, 'num', 'g', () => _sl(`finos.${k}`)]) },
     ] },
-  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L4', compacta: true, densa: true, titulo: 'Solos — sedimentação e massa específica real', cabs: CAB_SL,
+  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L4', compacta: true, densa: true, repeteCab: ['laboratorista'], titulo: 'Solos — sedimentação e massa específica real', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Sedimentação', campos: [fAt('Data de início', 'dataSed', _sl('ident.dataSed'), 'data'),
         fAt('Hora de início (hh:mm)', 'horaSed', _sl('ident.horaSed'), 'texto')] },
@@ -14385,7 +14452,7 @@ const FICHAS_SLAB = [
         linSl('Picnômetro nº', i => `pic.itens.${i}.numero`, 'texto'), linSl('Massa da amostra (g)', i => `pic.itens.${i}.amostra`),
         linSl('Picn. + amostra + água — P3 (g)', i => `pic.itens.${i}.p3`)] },
     ] },
-  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L5', titulo: 'Solos — limites de liquidez e plasticidade', cabs: CAB_SL,
+  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L5', repeteCab: ['laboratorista'], titulo: 'Solos — limites de liquidez e plasticidade', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataLim', _sl('ident.dataLim'), 'data'),
         fAt('Cor da amostra', 'cor', _sl('ident.cor'), 'texto')] },
@@ -14396,7 +14463,7 @@ const FICHAS_SLAB = [
         linSl('Cápsula nº', i => `lp.${i}.capsula`, 'texto'), linSl('Cápsula + solo úmido (g)', i => `lp.${i}.umido`),
         linSl('Cápsula + solo seco (g)', i => `lp.${i}.seco`)] },
     ] },
-  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L6', compacta: true, densa: true, titulo: 'Solos — compactação (5 pontos)', cabs: CAB_SL,
+  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L6', compacta: true, densa: true, repete: ['energia'], repeteCab: ['laboratorista'], titulo: 'Solos — compactação (5 pontos)', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataComp', _sl('ident.dataComp'), 'data'),
         fAt('Energia', 'energia', _sl('ident.energia'), 'texto')] },
@@ -14408,7 +14475,7 @@ const FICHAS_SLAB = [
         linhas: P5SL.flatMap(i => [0, 1, 2].map(j => [`Ponto ${i + 1} · cáps. ${j + 1}`, c => `comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`, 'num', '',
           c => _sl(`comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`)])) },
     ] },
-  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L7', titulo: 'Solos — ISC (expansão e penetração)', cabs: CAB_SL,
+  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L7', repete: ['prensa'], repeteCab: ['laboratorista'], titulo: 'Solos — ISC (expansão e penetração)', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Prensa e imersão', campos: [fAt('Prensa nº', 'prensa', _sl('cbr.prensa'), 'texto'),
         fAt('Início da imersão', 'dataCbr', _sl('ident.dataCbr'), 'data')] },
@@ -24481,6 +24548,33 @@ async function abrirEnsaioDoPonto(p) {
   return 'novo';
 }
 
+/* ------------------------------------------------------------
+   Dados gerais do plano (os mesmos em todos os furos): cliente, obra, prefixo, OS, local, estudo, energia.
+   No banco ficam nas colunas do plano (o prefixo e a OS juntos em "os": "NE-0000 / OS 000").
+   ------------------------------------------------------------ */
+function dadosGeraisPlano(pl) {
+  const [prefixo, ordem] = typeof separarPrefixoOs === 'function' ? separarPrefixoOs(pl.os) : ['', pl.os || ''];
+  return { cliente: pl.cliente || '', obra: pl.obra || '', prefixo, ordem, rodovia: pl.rodovia || '', estudo: pl.estudo || '', energia: pl.energia || '' };
+}
+function camposGeraisPlano(v, attr) {
+  const c = (k, rot, dica = '', larg = 1) => `<div${larg > 1 ? ` style="grid-column:span ${larg}"` : ''}><label>${rot}</label>
+    <input type="text" class="caixa-alta" data-${attr}="${k}" value="${atr(v[k] || '')}" placeholder="${atr(dica)}"></div>`;
+  const en = normPl(v.energia || '');
+  return `${c('cliente', 'Cliente (contratante)', 'Ex.: CONCESSIONÁRIA …', 2)}${c('obra', 'Obra', 'Ex.: NOME DA OBRA - LOTE 01 - ETAPA 01', 2)}
+    ${c('prefixo', 'Prefixo da obra', 'Ex.: NE-0000')}${c('ordem', 'Nº Ordem de Serviço', 'Ex.: OS 000')}
+    ${c('rodovia', 'Local', 'Ex.: BR-000, CIDADE - UF')}${c('estudo', 'Estudo', 'Ex.: ESTUDO DO SUBLEITO')}
+    <div><label>Energia da compactação</label><select data-${attr}="energia">${['NORMAL', 'INTERMEDIÁRIA', 'MODIFICADA'].map(e =>
+      `<option${normPl(e) === en || (!en && e === 'INTERMEDIÁRIA') ? ' selected' : ''}>${e}</option>`).join('')}</select></div>`;
+}
+function salvarDadosGeraisPlano(pl, v) {
+  Object.assign(pl, { cliente: v.cliente || '', obra: v.obra || '', os: [v.prefixo, v.ordem].filter(Boolean).join(' / '), rodovia: v.rodovia || '',
+    estudo: v.estudo || '', energia: v.energia || pl.energia, atualizado_em: new Date().toISOString() });
+  PLANOS.pendentes = PLANOS.pendentes.filter(x => !(x.tipo === 'planoDados' && x.id === pl.id));
+  if (!PLANOS.pendentes.some(x => x.tipo === 'plano' && x.id === pl.id)) PLANOS.pendentes.push({ tipo: 'planoDados', id: pl.id });
+  gravarPlanos();
+  if (typeof bancoLigado === 'function' && bancoLigado()) sincronizarBanco({ silencioso: true });
+}
+
 /** O cabeçalho do ensaio de solos com o que o plano sabe do ponto (registro, ST, local, camada, obra…). */
 function preencherComPonto(p, pl) {
   Object.assign(estado.medicao, { registro: String(p.registro), furo: p.st, camada: profTexto(p.prof), obra: pl.obra || estado.medicao.obra,
@@ -24536,6 +24630,13 @@ function alinharCabecalhoComPlano() {
   if (s.plano.pontoId !== p.id) { s.plano.pontoId = p.id; s.plano.id = p.plano_id; mudou = true; }
   if (String(estado.medicao.registro || '') !== String(p.registro)) { estado.medicao.registro = String(p.registro); mudou = true; }
   if (estado.medicao.furo !== p.st) { estado.medicao.furo = p.st; mudou = true; }
+  // dados gerais do plano preenchidos depois de o ensaio existir: completam o que estiver vazio
+  const pl = planoPorId(p.plano_id);
+  if (pl) {
+    const g = dadosGeraisPlano(pl), id = s.ident;
+    [['cliente', g.cliente], ['prefixo', g.prefixo], ['os', g.ordem], ['estudo', g.estudo]].forEach(([k, v]) => { if (v && !id[k]) { id[k] = v; mudou = true; } });
+    if (g.obra && !estado.medicao.obra) { estado.medicao.obra = g.obra; mudou = true; }
+  }
   return mudou;
 }
 
@@ -24615,6 +24716,10 @@ async function sincronizarPlanosBanco() {
         for (let i = 0; i < pts.length; i += 200)
           await pedidoBanco('/rest/v1/plano_pontos?on_conflict=id', { metodo: 'POST', cab: { Prefer: 'resolution=merge-duplicates,return=minimal' },
             corpo: pts.slice(i, i + 200).map(p => ({ ...so(p, CAMPOS_PONTO), empresa_id: emp })) });
+      } else if (x.tipo === 'planoDados') {
+        const pl = planoPorId(x.id); if (!pl) continue;
+        const corpo = so(pl, CAMPOS_PLANO.filter(k => !['id', 'criado_por'].includes(k)));
+        await pedidoBanco(`/rest/v1/planos?id=eq.${x.id}`, { metodo: 'PATCH', cab: { Prefer: 'return=minimal' }, corpo });
       } else if (x.tipo === 'ponto') {
         const campos = { ...x.campos }; delete campos.registro_local;
         if (x.feitosDelta) {
@@ -24670,6 +24775,9 @@ async function sincronizarPlanosBanco() {
   });
   const antesPl = PLANOS.planos;
   const mantidos = PLANOS.planos.filter(p => locais.has(p.id));
+  // dados gerais editados aqui e ainda não aceitos pelo banco (sem sinal): continuam valendo
+  const gerais = PLANOS.pendentes.filter(x => x.tipo === 'planoDados').map(x => PLANOS.planos.find(p => p.id === x.id)).filter(Boolean);
+  (planos || []).forEach(p => { const l = gerais.find(g => g.id === p.id); if (l) Object.assign(p, so(l, ['cliente', 'obra', 'os', 'rodovia', 'estudo', 'energia'])); });
   PLANOS.planos = [...(planos || []), ...mantidos];
   const pts = {}; PLANOS.planos.forEach(p => { pts[p.id] = novos[p.id] || PLANOS.pontos[p.id] || []; });
   const mudou = JSON.stringify([antesPl, PLANOS.pontos]) !== JSON.stringify([PLANOS.planos, pts]);
@@ -24733,9 +24841,9 @@ function cartaoImportacao(imp) {
       Primeiro ponto: ${atr(imp.pontos[0].st)} (km ${kmTexto(imp.pontos[0].km)}, ${fmt(imp.pontos[0].prof, 2)} m); último: ${atr(imp.pontos[imp.pontos.length - 1].st)}.</p>
     <div class="grid4">
       ${campo('codigo', 'Código do plano', imp.codigo)}${campo('nome', 'Nome', imp.nome)}
-      ${campo('cliente', 'Cliente (contratante)', imp.cliente || '', 'Ex.: CONCESSIONÁRIA …')}${campo('obra', 'Obra', imp.obra || '')}
-      ${campo('os', 'Prefixo da obra / Nº da OS', imp.os || '', 'Ex.: NE-2290 / OS 329')}${campo('estudo', 'Estudo', imp.estudo || 'ESTUDO DO SUBLEITO')}
-      ${campo('rodovia', 'Rodovia', imp.rodovia)}${campo('energia', 'Energia da compactação', imp.energia)}
+    </div>
+    <h3 class="sub-card">Dados gerais da obra <span class="hint">(vão para a identificação e o boletim de todos os furos)</span></h3>
+    <div class="grid4">${camposGeraisPlano({ ...imp, estudo: imp.estudo || 'ESTUDO DO SUBLEITO' }, 'plimp')}
       <div><label>Fuso UTM das coordenadas</label><input type="number" data-plimp="fuso" value="${imp.fuso || 20}"></div>
     </div>
     <div class="rasc-botoes" style="margin-top:12px"><button class="btn" type="button" id="plSalvarImp">Salvar plano</button>
@@ -24758,7 +24866,17 @@ function painelDoPlano(pl, gestor) {
       <td>${tipos.map(t => s[t.k] ? `<span class="pl-chip ${corChip(s[t.k])}" title="${t.rot}: ${s[t.k]}">${t.curto}</span>` : '').join('')}</td></tr>`;
   };
   const sel = pts.find(p => p.id === f.aberto);
+  const ger = dadosGeraisPlano(pl), falta = [!ger.cliente && 'cliente', !ger.ordem && 'OS', !ger.prefixo && 'prefixo', !ger.obra && 'obra'].filter(Boolean);
+  const geraisAbertos = FILTRO_PLANO.geraisAbertos === undefined ? falta.length > 0 : FILTRO_PLANO.geraisAbertos;
   return `
+    <details class="card pl-gerais" id="plGerais"${geraisAbertos ? ' open' : ''}>
+      <summary><h2>Dados gerais do plano <span class="tag">${falta.length ? 'faltam: ' + falta.join(', ') : 'mostrar / ocultar'}</span></h2></summary>
+      <p class="hint" style="margin:0 0 10px">Preencha uma vez: vão sozinhos para a <b>Identificação</b> e o <b>Boletim</b> de todos os furos deste plano
+        (e saem impressos nas fichas de rascunho).</p>
+      <div class="grid4">${camposGeraisPlano(ger, 'plger')}</div>
+      <div class="rasc-botoes" style="margin-top:12px"><button class="btn" type="button" id="plGerSalvar">Salvar dados gerais</button></div>
+      <div id="plGerAviso"></div>
+    </details>
     <div class="card">
       <h2>Plano ${atr(pl.codigo)} <span class="tag">${atr(pl.nome || '')}</span></h2>
       <p class="hint" style="margin:0 0 10px">${[pl.cliente, pl.obra, pl.os, pl.rodovia, pl.energia ? 'Compactação ' + pl.energia.toLowerCase() : ''].filter(Boolean).map(atr).join(' · ')}</p>
@@ -24869,6 +24987,7 @@ function ligarPlanos() {
   on('plSalvarImp', 'click', () => {
     const imp = FILTRO_PLANO.importado, extra = {};
     document.querySelectorAll('[data-plimp]').forEach(el => { extra[el.dataset.plimp] = el.type === 'number' ? Number(el.value) : el.value.toUpperCase().trim(); });
+    extra.os = [extra.prefixo, extra.ordem].filter(Boolean).join(' / '); delete extra.prefixo; delete extra.ordem;
     if (!extra.codigo) { avisoPlano('plAviso', 'erro', 'Dê um código ao plano.'); return; }
     try { salvarPlanoImportado(imp, extra); FILTRO_PLANO.importado = null; montarPlanos(); avisoPlano('plAviso', 'ok', `Plano <b>${atr(extra.codigo)}</b> salvo com ${imp.pontos.length} pontos.`); }
     catch (e) { avisoPlano('plAviso', 'erro', atr(e.message)); }
@@ -24913,6 +25032,14 @@ function ligarPlanos() {
     PLANOS.pendentes = PLANOS.pendentes.filter(x => x.id !== pl.id); PLANOS.pendentes.push({ tipo: 'apagar', id: pl.id });
     PLANOS.aberto = null; gravarPlanos(); montarPlanos();
     if (typeof bancoLigado === 'function' && bancoLigado()) sincronizarBanco({ silencioso: true });
+  });
+  const gd = $('plGerais'); if (gd) gd.querySelector('summary').addEventListener('click', () => { FILTRO_PLANO.geraisAbertos = !gd.open; });
+  on('plGerSalvar', 'click', () => {
+    const pl = planoPorId(PLANOS.aberto); if (!pl) return;
+    const v = {}; document.querySelectorAll('[data-plger]').forEach(el => { v[el.dataset.plger] = el.value.toUpperCase().trim(); });
+    salvarDadosGeraisPlano(pl, v);
+    FILTRO_PLANO.geraisAbertos = false; montarPlanos();
+    avisoPlano('plAviso', 'ok', 'Dados gerais do plano salvos: vão para a identificação e o boletim dos furos.');
   });
   on('plRelatorio', 'click', () => abrirRelatorioPlano(planoPorId(PLANOS.aberto)));
   on('plCsv', 'click', () => baixarCsvPlano(planoPorId(PLANOS.aberto)));
@@ -25524,10 +25651,11 @@ function cabBoletim(pl, est) {
   const [prefixoPl, osPl] = separarPrefixoOs(pl && pl.os);
   let prefixo = id.prefixo || '', ordem = id.os || '';
   if (!prefixo && /\//.test(ordem)) [prefixo, ordem] = separarPrefixoOs(ordem);
+  // Local do boletim: o do plano ("BR-000, CIDADE - UF"); o do laudo leva o km na frente
   return { cliente: id.cliente || (pl && pl.cliente) || '', obra: m.obra || (pl && (pl.obra || pl.nome)) || '',
-    local: id.local || (pl && pl.rodovia) || '', prefixo: prefixo || prefixoPl, ordem: ordem || osPl, dataEnsaio: m.dataEnsaio || '' };
+    local: (pl && pl.rodovia) || id.local || '', prefixo: prefixo || prefixoPl, ordem: ordem || osPl, dataEnsaio: m.dataEnsaio || '' };
 }
-/** "NE-2290 / OS 329" → ['NE-2290', 'OS 329']; sem barra, é só a OS. */
+/** "NE-0000 / OS 000" → ['NE-0000', 'OS 000']; sem barra, é só a OS. */
 function separarPrefixoOs(t) {
   const p = String(t || '').split('/').map(x => x.trim()).filter(Boolean);
   return p.length > 1 ? [p[0], p.slice(1).join(' / ')] : ['', p[0] || ''];
