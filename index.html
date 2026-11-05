@@ -775,8 +775,31 @@ details.card > summary::-webkit-details-marker{display:none;}
 .pl-mapa{height:380px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--card-2); z-index:0;}
 .pl-legenda{display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:8px;} .pl-legenda span{display:inline-flex; align-items:center; gap:5px;}
 .pl-legenda i{width:11px; height:11px; border-radius:50%; display:inline-block; border:1px solid var(--border);}
-.pl-passos .btn{flex:1 1 150px;} .pl-hora{font-weight:400; opacity:.85; font-size:12px; margin-left:4px;}
-.pl-detalhe h4.pl-sub{margin-top:16px;}
+/* detalhe do ponto: cabeçalho enxuto + uma etapa por cartão */
+.pl-det-topo{display:flex; align-items:center; gap:8px;} .pl-det-topo h3{margin:0;} .pl-det-topo .pl-fechar{margin-left:auto;}
+.pl-det-meta{margin:4px 0 6px;} .pl-pedidos{display:flex; flex-wrap:wrap; gap:2px; margin-bottom:10px;}
+.pl-etapa{border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); padding:10px 12px; margin-top:8px;}
+.pl-etapa > .pl-etapa-cab{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+.pl-etapa > .pl-etapa-cab .n{width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:none;
+  font-size:12px; font-weight:800; border:1.5px solid var(--border); color:var(--text-2);}
+.pl-etapa.feita > .pl-etapa-cab .n{background:var(--mk-conforme-500); border-color:var(--mk-conforme-500); color:var(--mk-branco);}
+.pl-etapa > .pl-etapa-cab b{font-size:14px;} .pl-etapa > .pl-etapa-cab .res{margin-left:auto; font-size:12px; color:var(--text-2); text-align:right;}
+.pl-etapa > .pl-etapa-cab .res .pl-reg{font-size:13px; color:var(--text);}
+.pl-passos{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;}
+.pl-passo{display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 4px; border-radius:var(--radius-sm); cursor:pointer;
+  border:1px dashed var(--border); background:transparent; color:var(--text-2); font:inherit; min-height:58px;}
+.pl-passo .ic{font-size:14px; line-height:1;} .pl-passo .rot{font-size:12px; font-weight:700;} .pl-passo .hr{font-size:11px;}
+.pl-passo.proximo{border:1.5px solid var(--mk-acento-500); color:var(--text); background:color-mix(in srgb, var(--mk-acento-500) 10%, transparent);}
+.pl-passo.feito{border-style:solid; border-color:color-mix(in srgb, var(--mk-conforme-500) 55%, transparent); color:var(--text);}
+.pl-passo.feito .ic{color:var(--mk-conforme-500); font-weight:800;}
+.pl-bloco{border-top:1px solid var(--border);} .pl-bloco:last-of-type{border-bottom:1px solid var(--border);}
+.pl-bloco > summary{display:flex; align-items:baseline; gap:8px; padding:9px 2px; cursor:pointer; list-style:none;}
+.pl-bloco > summary::-webkit-details-marker{display:none;}
+.pl-bloco > summary::before{content:'▸'; color:var(--text-2); width:12px;} .pl-bloco[open] > summary::before{content:'▾';}
+.pl-bloco > summary b{font-size:13px;} .pl-bloco > summary .hint{margin-left:auto; font-size:12px; text-align:right;}
+.pl-bloco-corpo{padding:2px 0 12px;}
+.pl-seco{margin:6px 0 0 !important; font-weight:500 !important; font-size:13px;}
+.pl-acoes{margin-top:10px;} .pl-manuais{margin-top:6px; display:flex; flex-wrap:wrap; gap:4px 18px;} .pl-manuais .pl-feito{margin:0; min-height:0;}
 .pl-cam{border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px 10px; margin-bottom:8px; background:var(--card);}
 .pl-cam-topo{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
 .pl-cam-grade{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px 10px;}
@@ -24761,24 +24784,28 @@ function imprimirLaudosDoPlano(pl, pontos) {
 
 function detalheDoPonto(p, pl, gestor) {
   const geo = geoDoPonto(p), e = ensaioDoPonto(p, pl), s = situacaoDosEnsaios(p, e), so = p.sondagem || {};
-  const hoje = new Date().toISOString().slice(0, 10);
   const pedidos = TIPOS_PLANO.filter(t => (p.ensaios || {})[t.k]);
+  const et = etapaDoPonto(p), sitE = e ? situacaoDe(e) : '';
+  // cada etapa num cartão numerado: o título já diz como está; o detalhe fica dentro
+  const etapa = (n, titulo, feito, resumo, corpo) => `<div class="pl-etapa${feito ? ' feita' : ''}">
+      <div class="pl-etapa-cab"><span class="n">${feito ? '✓' : n}</span><b>${titulo}</b><span class="res">${resumo}</span></div>${corpo}</div>`;
+  const manuais = TIPOS_PLANO.filter(t => t.manual && (p.ensaios || {})[t.k]);
   return `<div class="pl-detalhe">
-    <h3>${atr(p.st)} <span class="pl-et ${etapaDoPonto(p)}">${rotEtapa(etapaDoPonto(p))}</span></h3>
-    <p class="hint">${atr(trechoCurto(p.trecho))} · km ${kmTexto(p.km)} · profundidade ${fmt(p.prof, 2)} m · N ${fmt(p.norte, 3)} / E ${fmt(p.este, 3)}
+    <div class="pl-det-topo"><h3>${atr(p.st)}</h3><span class="pl-et ${et}">${rotEtapa(et)}</span>
+      <button class="btn ghost sm pl-fechar" type="button" data-plponto="${p.id}" title="Fechar">✕</button></div>
+    <p class="hint pl-det-meta">km ${kmTexto(p.km)} · prof. ${fmt(p.prof, 2)} m · ${atr(trechoCurto(p.trecho))}
       ${geo ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${geo.lat.toFixed(6)},${geo.lon.toFixed(6)}" target="_blank" rel="noopener">abrir no mapa</a>` : ''}</p>
-    <p class="hint">Pedido no plano: ${pedidos.map(t => `<span class="pl-chip ${corChip(s[t.k])}">${t.rot}</span>`).join(' ')}</p>
-    ${htmlCampoDoPonto(p, pl)}
-    <h4>2 · Amostra no laboratório</h4>
-    ${p.registro ? `<p>Registro <b class="pl-reg">${p.registro}</b>${p.registrado_em ? ` · ${dataBrSl(String(p.registrado_em).slice(0, 10))}` : ''}${p.registrado_por ? ` · ${atr(p.registrado_por)}` : ''}</p>`
-      : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (${atr(registroDoPonto(p, pl))})</button></div>`}
-    <h4>3 · Ensaios</h4>
-    <div class="rasc-botoes"><button class="btn sm" type="button" id="plAbrir">${e ? 'Abrir o ensaio' : 'Começar o ensaio de laboratório'}</button>
-      ${e ? `<span class="hint">Registro ${atr(e.resumo.registro)} · ${SITUACOES[situacaoDe(e)] || situacaoDe(e)}</span>` : ''}</div>
-    ${TIPOS_PLANO.filter(t => t.manual && (p.ensaios || {})[t.k]).map(t => `<label class="pl-feito"><input type="checkbox" data-plfeito="${t.k}"${(p.feitos || {})[t.k] ? ' checked' : ''}> ${t.rot} feito</label>`).join('')}
-    ${gestor && e && situacaoDe(e) === 'aprovado' ? `<h4>4 · Cliente</h4><div class="rasc-botoes">
+    <div class="pl-pedidos">${pedidos.map(t => `<span class="pl-chip ${corChip(s[t.k])}">${t.curto}</span>`).join('')}</div>
+    ${etapa(1, 'Campo', !!so.data, so.data ? `sondado ${dataBrSl(so.data)}${ehNumero(so.prof) ? ' · ' + fmt(so.prof, 2) + ' m' : ''}` : 'a sondar', htmlCampoDoPonto(p, pl))}
+    ${etapa(2, 'Amostra', !!p.registro, p.registro ? `<b class="pl-reg">${p.registro}</b>` : 'sem registro',
+      p.registro ? `<p class="hint" style="margin:0">Registrada${p.registrado_em ? ' em ' + dataBrSl(String(p.registrado_em).slice(0, 10)) : ''}${p.registrado_por ? ' por ' + atr(p.registrado_por) : ''}.</p>`
+        : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (${atr(registroDoPonto(p, pl))})</button></div>`)}
+    ${etapa(3, 'Ensaios', sitE === 'aprovado', e ? (SITUACOES[sitE] || sitE) : 'não começado', `
+      <div class="rasc-botoes"><button class="btn sm${e ? ' ghost' : ''}" type="button" id="plAbrir">${e ? 'Abrir o ensaio' : 'Começar o ensaio de laboratório'}</button></div>
+      ${manuais.length ? `<div class="pl-manuais">${manuais.map(t => `<label class="pl-feito"><input type="checkbox" data-plfeito="${t.k}"${(p.feitos || {})[t.k] ? ' checked' : ''}> ${t.rot} feito</label>`).join('')}</div>` : ''}`)}
+    ${gestor && e && sitE === 'aprovado' ? etapa(4, 'Cliente', !!p.enviado_em, p.enviado_em ? 'enviado ' + dataBrSl(String(p.enviado_em).slice(0, 10)) : 'a enviar', `<div class="rasc-botoes">
       <button class="btn sm ghost" type="button" id="plPdf">PDF do laudo</button>
-      <button class="btn sm" type="button" id="plEnviado"${p.enviado_em ? ' disabled' : ''}>${p.enviado_em ? '✓ Enviado em ' + dataBrSl(String(p.enviado_em).slice(0, 10)) : 'Marcar enviado ao cliente'}</button></div>` : ''}
+      ${p.enviado_em ? '' : '<button class="btn sm" type="button" id="plEnviado">Marcar enviado ao cliente</button>'}</div>`) : ''}
     <div id="plPontoAviso"></div>
   </div>`;
 }
@@ -25075,9 +25102,13 @@ async function dadosDaFoto(f) {
    ------------------------------------------------------------ */
 function htmlCampoDoPonto(p, pl) {
   const so = sondagemDe(p), b = boletimDoPonto(p), hoje = dataLocal();
+  // linha do tempo do furo: só o próximo passo é o botão em destaque; o que já foi vira a hora marcada
+  const ordem = ['chegada', 'inicio', 'fim'], proximo = ordem.find(k => !so[k]);
   const passo = (k, rot, ic) => {
     const x = so[k];
-    return `<button class="btn sm${x ? ' ghost' : ''}" type="button" data-plmarca="${k}">${ic} ${rot}${x ? ` <span class="pl-hora">${horaBr(x.em)}${ehNumero(x.dist) ? ` · ${x.dist} m` : ''}</span>` : ''}</button>`;
+    return `<button class="pl-passo${x ? ' feito' : k === proximo ? ' proximo' : ''}" type="button" data-plmarca="${k}">
+      <span class="ic">${x ? '✓' : ic}</span><span class="rot">${rot}</span>
+      <span class="hr">${x ? horaBr(x.em) + (ehNumero(x.dist) ? ` · ${x.dist} m` : '') : 'tocar para marcar'}</span></button>`;
   };
   const opc = (lista, v) => `<option value=""></option>` + lista.map(x => `<option${x === v ? ' selected' : ''}>${x}</option>`).join('');
   const camadas = (b.camadas || []).map((c, i) => `<div class="pl-cam" data-plcam="${i}">
@@ -25093,36 +25124,50 @@ function htmlCampoDoPonto(p, pl) {
   const fotos = (so.fotos || []).map((f, i) => `<button type="button" class="pl-foto" data-plfoto="${i}" title="${atr(dataHoraBr(f.em))}">
       <img alt="" data-plfotoimg="${atr(f.id)}"><span>${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]} · ${horaBr(f.em)}${ehNumero(f.dist) ? ` · ${f.dist} m` : ''}${f.caminho ? '' : ' · 📱'}</span></button>`).join('');
   const alerta = ['chegada', 'inicio', 'fim'].map(k => so[k]).filter(x => x && ehNumero(x.dist) && x.dist > LIMITE_DIST_CAMPO);
+  const ab = abertoCampo(p);
+  const bloco = (k, titulo, resumo, corpo) => `<details class="pl-bloco" data-plbloco="${k}"${ab[k] ? ' open' : ''}>
+      <summary><b>${titulo}</b><span class="hint">${resumo}</span></summary><div class="pl-bloco-corpo">${corpo}</div></details>`;
+  const nCam = (b.camadas || []).length, nFotos = (so.fotos || []).length;
+  const resumoDados = [so.data ? dataBrSl(so.data) : 'a preencher', ehNumero(so.prof) ? fmt(so.prof, 2) + ' m' : '', so.equipe || '',
+    so.naSeco ? 'furo seco' : ehNumero(so.na) ? 'NA ' + fmt(so.na, 2) + ' m' : ''].filter(Boolean).join(' · ');
   return `
-    <h4>1 · Sondagem (campo)</h4>
-    ${so.data ? `<p>✓ Sondado em <b>${dataBrSl(so.data)}</b>${so.prof ? `, ${fmt(so.prof, 2)} m` : ''}${so.equipe ? ` · ${atr(so.equipe)}` : ''}${ehNumero(so.distancia) ? ` · GPS a ${fmt(so.distancia, 0)} m do ponto` : ''}${so.obs ? ` · ${atr(so.obs)}` : ''}</p>` : ''}
-    <div class="rasc-botoes pl-passos">${passo('chegada', 'Cheguei ao ponto', '📍')}${passo('inicio', 'Iniciar furo', '▶')}${passo('fim', 'Terminar furo', '■')}</div>
-    ${alerta.length ? `<div class="aviso erro"><span class="ico">!</span><span>Registro a mais de ${LIMITE_DIST_CAMPO} m da coordenada do plano (${alerta.map(x => x.dist + ' m').join(', ')}). Confira se é o ponto certo.</span></div>` : ''}
+    <div class="pl-passos">${passo('chegada', 'Chegada', '📍')}${passo('inicio', 'Início do furo', '▶')}${passo('fim', 'Fim do furo', '■')}</div>
+    ${alerta.length ? `<div class="aviso erro"><span class="ico">!</span><span>Marcado a mais de ${LIMITE_DIST_CAMPO} m da coordenada do plano (${alerta.map(x => x.dist + ' m').join(', ')}). Confira se é o ponto certo.</span></div>` : ''}
     <div id="plsAviso"></div>
-    <div class="grid4">
+    ${bloco('dados', 'Dados do furo', resumoDados, `<div class="grid4">
       <div><label>Data</label><input type="date" id="plsData" value="${atr(so.data || hoje)}"></div>
       <div><label>Profundidade atingida (m)</label><input type="number" inputmode="decimal" step="0.01" id="plsProf" value="${so.prof ?? p.prof ?? ''}"></div>
       <div><label>Equipe / sondador</label><input type="text" class="caixa-alta" id="plsEquipe" value="${atr(so.equipe || quemSou())}"></div>
       <div><label>Observação</label><input type="text" id="plsObs" value="${atr(so.obs || '')}" placeholder="Ex.: chuva no dia"></div>
-      <div><label>Nível d'água (m)</label><input type="number" inputmode="decimal" step="0.01" id="plsNa" value="${b.na ?? ''}"${b.naSeco ? ' disabled' : ''}></div>
-      <div><label class="pl-feito" style="margin-top:22px"><input type="checkbox" id="plsSeco"${b.naSeco ? ' checked' : ''}> Furo seco (sem água)</label></div>
-      <div style="grid-column:span 2"><label>Motivo da parada</label><select id="plsParada"><option value=""></option>${PARADAS.map(([k, t]) => `<option value="${k}"${b.parada === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
-    </div>
-    <h4 class="pl-sub">Camadas do furo (boletim)</h4>
-    <div class="pl-camadas">${camadas || '<p class="hint">Nenhuma camada ainda. Toque em <b>+ Camada</b> para descrever o solo do furo.</p>'}</div>
-    <div class="rasc-botoes"><button class="btn ghost sm" type="button" id="plsCamada">+ Camada</button>
-      <button class="btn sm" type="button" id="plsOk">${so.data ? 'Salvar sondagem' : 'Marcar como sondado'}</button>
-      ${so.data ? '<button class="btn ghost sm" type="button" id="plsBoletim">Boletim de sondagem (PDF)</button>' : ''}</div>
-    <h4 class="pl-sub">Fotos do campo <span class="hint">(data, hora e GPS gravados na foto)</span></h4>
-    <div class="rasc-botoes"><select id="plsFotoEtapa" style="max-width:190px">${ETAPAS_FOTO.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
-      <label class="btn sm ghost"><input type="file" accept="image/*" capture="environment" id="plsFoto" hidden>📷 Tirar foto</label></div>
-    <div class="pl-fotos">${fotos}</div>`;
+      <div><label>Nível d'água (m)</label><input type="number" inputmode="decimal" step="0.01" id="plsNa" value="${b.na ?? ''}"${b.naSeco ? ' disabled' : ''}>
+        <label class="pl-feito pl-seco"><input type="checkbox" id="plsSeco"${b.naSeco ? ' checked' : ''}> Furo seco (sem água)</label></div>
+      <div style="grid-column:span 3"><label>Motivo da parada</label><select id="plsParada"><option value=""></option>${PARADAS.map(([k, t]) => `<option value="${k}"${b.parada === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+    </div>`)}
+    ${bloco('camadas', 'Camadas do solo', nCam ? `${nCam} camada(s)${rascCampo()[p.id] ? ' · não salvas' : ''}` : 'nenhuma ainda', `
+      <div class="pl-camadas">${camadas || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
+      <button class="btn ghost sm" type="button" id="plsCamada">+ Camada</button>`)}
+    ${bloco('fotos', 'Fotos do campo', nFotos ? `${nFotos} foto(s)` : 'nenhuma ainda', `
+      <div class="rasc-botoes"><select id="plsFotoEtapa" style="max-width:190px">${ETAPAS_FOTO.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
+        <label class="btn sm ghost"><input type="file" accept="image/*" capture="environment" id="plsFoto" hidden>📷 Tirar foto</label></div>
+      <p class="hint" style="margin:6px 0 0">Data, hora e GPS ficam gravados na própria foto.</p>
+      <div class="pl-fotos">${fotos}</div>`)}
+    <div class="rasc-botoes pl-acoes"><button class="btn sm" type="button" id="plsOk">${so.data ? 'Salvar sondagem' : 'Marcar como sondado'}</button>
+      ${so.data ? '<button class="btn ghost sm" type="button" id="plsBoletim">Boletim (PDF)</button>' : ''}</div>`;
+}
+
+/* Quais blocos do ponto estão abertos — resiste à tela ser remontada (sincronização a cada 15 s).
+   Começa enxuto: os dados abertos só enquanto o ponto não foi sondado. */
+const ABERTO_CAMPO = {};
+function abertoCampo(p) {
+  if (!ABERTO_CAMPO[p.id]) { const so = sondagemDe(p); ABERTO_CAMPO[p.id] = { dados: !so.data, camadas: !!rascCampo()[p.id], fotos: false }; }
+  return ABERTO_CAMPO[p.id];
 }
 
 function ligarCampoDoPonto(p, pl) {
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   const rasc = () => { const r = rascCampo(); r[p.id] = r[p.id] || boletimDoPonto(p); return r[p.id]; };
   const guarda = () => gravarRascCampo();
+  document.querySelectorAll('[data-plbloco]').forEach(d => d.addEventListener('toggle', () => { abertoCampo(p)[d.dataset.plbloco] = d.open; }));
   // marcações de horário com GPS
   document.querySelectorAll('[data-plmarca]').forEach(bt => bt.addEventListener('click', async () => {
     const k = bt.dataset.plmarca, so = sondagemDe(p);
@@ -25145,7 +25190,7 @@ function ligarCampoDoPonto(p, pl) {
   on('plsCamada', 'click', () => {
     const r = rasc(), ult = r.camadas[r.camadas.length - 1];
     const de = ult && ehNumero(ult.ate) ? ult.ate : 0;
-    r.camadas.push({ de, ate: null, material: '', cor: '', umidade: '', compl: '' }); guarda(); montarPlanos();
+    r.camadas.push({ de, ate: null, material: '', cor: '', umidade: '', compl: '' }); guarda(); abertoCampo(p).camadas = true; montarPlanos();
   });
   document.querySelectorAll('[data-plcam] [data-cam]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
     const i = +el.closest('[data-plcam]').dataset.plcam, k = el.dataset.cam, c = rasc().camadas[i]; if (!c) return;
@@ -25162,6 +25207,7 @@ function ligarCampoDoPonto(p, pl) {
     marcarSondado(p, { data: $('plsData').value, prof: Number.isFinite(prof) ? prof : null, equipe: $('plsEquipe').value.toUpperCase().trim(),
       obs: $('plsObs').value.trim(), camadas, na: r.naSeco ? null : (r.na ?? null), naSeco: !!r.naSeco, parada: r.parada || '', ...gps });
     delete rascCampo()[p.id]; gravarRascCampo();
+    ABERTO_CAMPO[p.id] = { dados: false, camadas: false, fotos: false };     // salvo: a tela volta a ficar enxuta
     montarPlanos(); avisoPlano('plPontoAviso', 'ok', `${atr(p.st)}: sondagem salva.`);
   });
   on('plsBoletim', 'click', () => abrirBoletins(pl, [p]));
@@ -25169,7 +25215,7 @@ function ligarCampoDoPonto(p, pl) {
   on('plsFoto', 'change', async ev => {
     const arq = ev.target.files && ev.target.files[0]; if (!arq) return;
     avisoPlano('plsAviso', '', 'Guardando a foto com data, hora e GPS…');
-    try { await adicionarFotoCampo(p, arq, $('plsFotoEtapa').value); montarPlanos(); avisoPlano('plsAviso', 'ok', 'Foto guardada. Sobe para o banco na próxima sincronização.'); }
+    try { await adicionarFotoCampo(p, arq, $('plsFotoEtapa').value); abertoCampo(p).fotos = true; montarPlanos(); avisoPlano('plsAviso', 'ok', 'Foto guardada. Sobe para o banco na próxima sincronização.'); }
     catch (e) { avisoPlano('plsAviso', 'erro', 'Não consegui guardar a foto: ' + atr(e.message)); }
   });
   const fotos = sondagemDe(p).fotos || [];
@@ -25200,10 +25246,10 @@ function htmlMapaPlano(pl) {
 
 function ligarMapaPlano(pl) {
   const div = $('plMapa');
-  if (MAPA_PLANO) { try { MAPA_VISTA = { c: MAPA_PLANO.getCenter(), z: MAPA_PLANO.getZoom() }; MAPA_PLANO.remove(); } catch (e) {} MAPA_PLANO = null; }
+  if (MAPA_PLANO) { try { MAPA_VISTA = { c: MAPA_PLANO.getCenter(), z: MAPA_PLANO.getZoom() }; MAPA_PLANO.stop(); MAPA_PLANO.remove(); } catch (e) {} MAPA_PLANO = null; }
   if (!div || !temMapa()) return;
   const pts = pontosFiltrados(pl).map(p => ({ p, g: geoDoPonto(p) })).filter(x => x.g);
-  const mapa = L.map(div, { zoomControl: true, attributionControl: true, preferCanvas: true });
+  const mapa = L.map(div, { zoomControl: true, attributionControl: true, preferCanvas: true, fadeAnimation: false });
   MAPA_PLANO = mapa;
   const fundo = MAPA_FUNDO === 'satelite'
     ? L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagens © Esri' })
@@ -25222,16 +25268,19 @@ function ligarMapaPlano(pl) {
       L.polyline([[g.lat, g.lon], [fim.lat, fim.lon]], { color: '#D93025', weight: 2, dashArray: '4 4' }).bindTooltip(`${p.st}: furo a ${fim.dist} m da coordenada`).addTo(grupo);
   });
   if (MAPA_EU) L.circleMarker([MAPA_EU.lat, MAPA_EU.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#1A73E8', fillOpacity: 1 }).bindTooltip('Você').addTo(mapa);
+  // a tela do plano é remontada com frequência (filtro, sincronização): sem animação no encaixe e
+  // nada roda num mapa que já foi trocado por outro
   const encaixa = () => {
-    mapa.invalidateSize();
-    if (MAPA_VISTA) mapa.setView(MAPA_VISTA.c, MAPA_VISTA.z);
-    else if (pts.length) mapa.fitBounds(grupo.getBounds(), { padding: [20, 20], maxZoom: 16 });
-    else mapa.setView([-14, -52], 4);
+    if (MAPA_PLANO !== mapa) return;
+    mapa.invalidateSize({ animate: false });
+    if (MAPA_VISTA) mapa.setView(MAPA_VISTA.c, MAPA_VISTA.z, { animate: false });
+    else if (pts.length) mapa.fitBounds(grupo.getBounds(), { padding: [20, 20], maxZoom: 16, animate: false });
+    else mapa.setView([-14, -52], 4, { animate: false });
   };
   encaixa(); setTimeout(encaixa, 60);
   const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
   on('plMapaFundo', () => { MAPA_FUNDO = MAPA_FUNDO === 'mapa' ? 'satelite' : 'mapa'; montarPlanos(); });
-  on('plMapaTodos', () => { MAPA_VISTA = null; if (pts.length) mapa.fitBounds(grupo.getBounds(), { padding: [20, 20], maxZoom: 16 }); });
+  on('plMapaTodos', () => { MAPA_VISTA = null; if (pts.length) mapa.fitBounds(grupo.getBounds(), { padding: [20, 20], maxZoom: 16, animate: false }); });
   on('plMapaEu', async () => {
     const pos = await posicaoAgora();
     if (!pos) { avisoPlano('plAviso', 'erro', 'Não consegui a posição do aparelho (ligue a localização).'); return; }
