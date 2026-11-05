@@ -808,6 +808,12 @@ details.card > summary::-webkit-details-marker{display:none;}
 .pl-fotos{display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px; margin-top:8px;}
 .pl-foto{display:flex; flex-direction:column; gap:3px; padding:0; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); overflow:hidden; cursor:pointer; text-align:left; color:var(--text);}
 .pl-foto img{width:100%; height:90px; object-fit:cover; background:var(--card-2);} .pl-foto span{font-size:11px; padding:2px 6px 5px;}
+.pl-foto-item{position:relative;} .pl-foto-item .pl-foto{width:100%;}
+.pl-foto-x{position:absolute; top:4px; right:4px; width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--card);
+  color:var(--mk-critico); font-weight:800; font-size:14px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+.pl-foto-conf{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:6px; padding:6px; text-align:center;
+  background:color-mix(in srgb, var(--card) 92%, transparent); border:1px solid var(--mk-critico); border-radius:var(--radius-sm); font-size:12px;}
+.pl-foto-conf div{display:flex; gap:6px;}
 .pl-tab td.pl-ruim{color:var(--mk-critico); font-weight:700;}
 .pl-spt td{padding:3px 2px;} .pl-spt td input{width:54px; min-width:44px; padding:6px 5px; text-align:right;} .pl-spt td.pen input{width:46px;}
 .pl-spt td:last-child input{width:100%; min-width:120px; text-align:left;}
@@ -24784,6 +24790,10 @@ async function sincronizarPlanosBanco() {
           continue;
         }
         await pedidoBanco(`/rest/v1/plano_pontos?id=eq.${x.id}`, { metodo: 'PATCH', cab: { Prefer: 'return=minimal' }, corpo: campos });
+      } else if (x.tipo === 'apagarFoto') {
+        // foto do campo apagada: arquivo e descrição; se o banco não deixar (permissão), a foto já saiu do ponto
+        try { await pedidoBanco(`/storage/v1/object/anexos/${x.caminho}`, { metodo: 'DELETE' }); } catch (e) { if (e.status === undefined) throw e; }
+        try { await pedidoBanco(`/rest/v1/anexos?id=eq.${encodeURIComponent(x.id)}`, { metodo: 'DELETE', cab: { Prefer: 'return=minimal' } }); } catch (e) { if (e.status === undefined) throw e; }
       } else if (x.tipo === 'apagar') {
         await pedidoBanco(`/rest/v1/planos?id=eq.${x.id}`, { metodo: 'DELETE', cab: { Prefer: 'return=representation' } });
       }
@@ -25293,6 +25303,20 @@ async function adicionarFotoCampo(p, arq, etapa) {
   return foto;
 }
 
+let FOTO_A_APAGAR = null;      // id da foto com a pergunta "Apagar esta foto?" aberta
+
+/** Apaga a foto do campo: sai do ponto (para a equipe toda), do aparelho e, se já subiu, do armazenamento do banco. */
+function apagarFotoCampo(p, id) {
+  const so = sondagemDe(p), f = (so.fotos || []).find(x => x.id === id);
+  if (!f) return false;
+  salvarCampo(p, { fotos: (so.fotos || []).filter(x => x.id !== id) });
+  bancoAnexo('tirar', id).catch(() => {});
+  if (URLS_ANEXO[id]) { try { URL.revokeObjectURL(URLS_ANEXO[id]); } catch (e) {} delete URLS_ANEXO[id]; }
+  // o arquivo no banco sai na próxima sincronização (sem sinal agora, fica na fila)
+  if (f.caminho) { PLANOS.pendentes.push({ tipo: 'apagarFoto', id, caminho: f.caminho }); gravarPlanos(); }
+  return true;
+}
+
 /** Sobe as fotos de campo que ainda estão só neste aparelho (chamado na sincronização dos planos). */
 async function enviarFotosCampo() {
   if (typeof bancoLigado !== 'function' || !bancoLigado()) return 0;
@@ -25344,8 +25368,14 @@ function htmlCampoDoPonto(p, pl) {
         <div><label>Umidade</label><select data-cam="umidade">${opc(UMIDADES_SOLO, c.umidade)}</select></div>
         <div><label>Complemento</label><input type="text" data-cam="compl" value="${atr(c.compl || '')}" placeholder="Ex.: com pedregulhos"></div>
       </div></div>`).join('');
-  const fotos = (so.fotos || []).map((f, i) => `<button type="button" class="pl-foto" data-plfoto="${i}" title="${atr(dataHoraBr(f.em))}">
-      <img alt="" data-plfotoimg="${atr(f.id)}"><span>${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]} · ${horaBr(f.em)}${ehNumero(f.dist) ? ` · ${f.dist} m` : ''}${f.caminho ? '' : ' · 📱'}</span></button>`).join('');
+  // cada foto com o ✕ para apagar; a confirmação é no próprio quadro (caixa do navegador some atrás do teclado no celular)
+  const fotos = (so.fotos || []).map((f, i) => `<div class="pl-foto-item">
+      <button type="button" class="pl-foto" data-plfoto="${i}" title="${atr(dataHoraBr(f.em))}">
+      <img alt="" data-plfotoimg="${atr(f.id)}"><span>${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]} · ${horaBr(f.em)}${ehNumero(f.dist) ? ` · ${f.dist} m` : ''}${f.caminho ? '' : ' · 📱'}</span></button>
+      ${FOTO_A_APAGAR === f.id
+        ? `<div class="pl-foto-conf"><b>Apagar esta foto?</b><div><button class="btn sm" type="button" data-plfotosim="${atr(f.id)}">Apagar</button>
+            <button class="btn sm ghost" type="button" data-plfotonao="1">Não</button></div></div>`
+        : `<button type="button" class="pl-foto-x" data-plfototira="${atr(f.id)}" title="Apagar foto" aria-label="Apagar foto">✕</button>`}</div>`).join('');
   const alerta = ['chegada', 'inicio', 'fim'].map(k => so[k]).filter(x => x && ehNumero(x.dist) && x.dist > LIMITE_DIST_CAMPO);
   const ab = abertoCampo(p);
   const bloco = (k, titulo, resumo, corpo) => `<details class="pl-bloco" data-plbloco="${k}"${ab[k] ? ' open' : ''}>
@@ -25454,6 +25484,12 @@ function ligarCampoDoPonto(p, pl) {
   });
   const fotos = sondagemDe(p).fotos || [];
   document.querySelectorAll('[data-plfotoimg]').forEach(img => { const f = fotos.find(x => x.id === img.dataset.plfotoimg); if (f) preencherImagem(img, f).catch(() => {}); });
+  document.querySelectorAll('[data-plfototira]').forEach(bt => bt.addEventListener('click', ev => { ev.stopPropagation(); FOTO_A_APAGAR = bt.dataset.plfototira; abertoCampo(p).fotos = true; montarPlanos(); }));
+  document.querySelectorAll('[data-plfotonao]').forEach(bt => bt.addEventListener('click', () => { FOTO_A_APAGAR = null; montarPlanos(); }));
+  document.querySelectorAll('[data-plfotosim]').forEach(bt => bt.addEventListener('click', () => {
+    apagarFotoCampo(p, bt.dataset.plfotosim); FOTO_A_APAGAR = null; abertoCampo(p).fotos = true; montarPlanos();
+    avisoPlano('plsAviso', 'ok', 'Foto apagada.');
+  }));
   document.querySelectorAll('[data-plfoto]').forEach(bt => bt.addEventListener('click', () =>
     abrirVisorAnexos(fotos.map(f => ({ aba: `${p.st} · ${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]}`, a: f })), +bt.dataset.plfoto)));
 }
