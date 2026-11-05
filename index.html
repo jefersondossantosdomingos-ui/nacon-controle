@@ -13325,7 +13325,7 @@ function cfgSlabPadrao() {
 function novoSlab(cfg = cfgSlabPadrao()) {
   return {
     cfg,
-    ident: { cliente: '', os: '', estudo: '', local: '', laboratoristas: '', registroComp: '', energia: 'NORMAL',
+    ident: { cliente: '', prefixo: '', os: '', estudo: '', local: '', laboratoristas: '', registroComp: '', energia: 'NORMAL',
              dataSed: '', horaSed: '', dataPic: '', dataLim: '', dataComp: '', dataCbr: '', cor: '', descricao: '' },
     hig: [{ capsula: '', umido: null, seco: null }, { capsula: '', umido: null, seco: null }],
     totalAr: null, grossos: nulosSl(7), parcialUmida: 120, finos: nulosSl(7),
@@ -13341,7 +13341,7 @@ function novoSlab(cfg = cfgSlabPadrao()) {
       pen: [0, ...nulosSl(9)], corr254: null, corr508: null })) },
     adot: { ll: null, dmax: null, hot: null, cbr: null, exp: null },
     // boletim de sondagem à trado (NBR 9603) — aba "Boletim"; o campo preenche pelo plano (app-campo.js)
-    bol: { data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: false, parada: '', cota: null,
+    bol: { data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: '', parada: '', cota: null,
            outras: '', obs: '', camadas: [] },
   };
 }
@@ -13535,6 +13535,9 @@ function calcularSlabTela() {
 
 function atualizarSlab() {
   if (!estado.slab) estado.slab = novoSlab();
+  // ensaio de antes do campo "Prefixo da obra": o "NE-2290 / OS 329" de um campo só vira os dois
+  const id = estado.slab.ident;
+  if (id && !id.prefixo && /\//.test(id.os || '')) { const [a, ...b] = id.os.split('/'); id.prefixo = a.trim(); id.os = b.join('/').trim(); }
   // ensaio ligado ao plano: registro e ST sempre os do ponto
   if (typeof alinharCabecalhoComPlano === 'function' && alinharCabecalhoComPlano()) montarSlab();
   const r = calcularSlabTela();
@@ -13584,7 +13587,8 @@ function montarSlab() {
               opcoesPontosDoPlano((s.plano || {}).pontoId)}</select></div>`
           : `<div><label>PI cadastrado</label><select id="slPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI em Dados gerais'}</option>${
           listaPis().map(p => `<option value="${atr(p.numero)}"${acharPi(m.furo) === p ? ' selected' : ''}>PI ${atr(p.numero)}${ehNumero(p.km) ? ' · km ' + fmt(p.km, 3) : ''}</option>`).join('')}</select></div>`}
-        <div><label>Prefixo obra / OS Nº</label>${tSl('ident.os', 'Ex.: NE-2290 / OS 329')}</div>
+        <div><label>Prefixo da obra</label>${tSl('ident.prefixo', 'Ex.: NE-2290')}</div>
+        <div><label>Nº Ordem de Serviço</label>${tSl('ident.os', 'Ex.: OS 329')}</div>
         <div style="grid-column:span 2"><label>Cliente</label>${tSl('ident.cliente')}</div>
         <div style="grid-column:span 2">${cabSl('obra', 'Obra').replace(/^<div>|<\/div>$/g, '')}</div>
         <div style="grid-column:span 2"><label>Estudo</label>${tSl('ident.estudo', 'Ex.: ESTUDO DO SUBLEITO')}</div>
@@ -14133,7 +14137,7 @@ function cabecalhoSl() {
   return `<table class="sl-cab"><colgroup><col style="width:52mm"><col style="width:96mm"><col style="width:46mm"></colgroup><tr>
     <td class="sl-logo"><div class="lg">${logo}</div><div class="end">${esc(cfg.endereco || '').replace(/\n/g, '<br>')}</div></td>
     <td class="sl-campos"><table>${linha('Cliente:', id.cliente)}${linha('Obra:', m.obra)}${linha('Estudo:', id.estudo)}${linha('Camada:', m.camada)}${linha('Local:', id.local)}</table></td>
-    <td class="sl-dir"><div class="os"><span>Prefixo Obra/ OS Nº</span><b>${esc(id.os || '')}</b></div>
+    <td class="sl-dir"><div class="os"><span>Prefixo Obra/ OS Nº</span><b>${esc([id.prefixo, id.os].filter(Boolean).join(' / '))}</b></div>
       <div class="reg"><span>Registro de<br>ensaio Nº</span><b>${esc(m.registro || '')}</b></div>
       <div class="fu"><span>Estaca/ Furo</span><b>${esc(m.furo || '')}</b></div></td></tr></table>`;
 }
@@ -14333,11 +14337,31 @@ const SIGLA_SL = (typeof MARCA !== 'undefined' && MARCA.siglaFichas) || 'RASC';
 const FICHAS_SLAB = [
   { aba: 'slident', modo: 'slab', codigo: SIGLA_SL + '-L1', titulo: 'Solos (laboratório) — identificação', primeira: true, cabs: CAB_SL,
     blocos: [{ tipo: 'campos', titulo: 'Identificação do ensaio', campos: [
-      fAt('Cliente', 'cliente', _sl('ident.cliente'), 'texto', 2), fAt('Prefixo obra / OS Nº', 'os', _sl('ident.os'), 'texto'),
+      fAt('Cliente', 'cliente', _sl('ident.cliente'), 'texto', 2), fAt('Prefixo da obra', 'prefixo', _sl('ident.prefixo'), 'texto'),
+      fAt('Nº Ordem de Serviço', 'os', _sl('ident.os'), 'texto'),
       fAt('Obra', 'obra', _slc('obra'), 'texto', 2), fAt('Estudo', 'estudo', _sl('ident.estudo'), 'texto'),
       fAt('Camada (profundidade)', 'camada', _slc('camada'), 'texto'), fAt('Local', 'local', _sl('ident.local'), 'texto', 2),
       fAt('Laboratoristas', 'labs', _sl('ident.laboratoristas'), 'texto', 2)] }] },
-  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L2', compacta: true, titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
+  // boletim de sondagem à trado (NBR 9603): a ficha que vai para o campo — as escolhas vêm escritas no rótulo
+  { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)',
+    cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]],
+    blocos: [
+      { tipo: 'campos', titulo: 'Furo', campos: [fAt('Data de execução', 'bolData', _sl('bol.data'), 'data'),
+        fAt('Profundidade do furo (m)', 'bolProf', _sl('bol.prof')), fAt('Cota (m)', 'bolCota', _sl('bol.cota')),
+        fAt('Relevo (plano / ondulado / montanhoso / encosta)', 'relevo', _sl('bol.relevo'), 'texto', 2),
+        fAt('Terreno (seco / úmido / alagado)', 'terreno', _sl('bol.terreno'), 'texto'),
+        fAt('Vegetação (rasteira / arbustiva / arbórea / sem)', 'vegetacao', _sl('bol.vegetacao'), 'texto', 2),
+        fAt('Nível d\'água (seco / sim)', 'naSeco', _sl('bol.naSeco'), 'texto'),
+        fAt('Prof. do nível d\'água (m)', 'bolNa', _sl('bol.na')),
+        fAt('Furo paralisado por (prof. do projeto / terreno resistente / estrato rochoso / lençol freático / desmoronamento)', 'parada', _sl('bol.parada'), 'texto', 2),
+        fAt('Outras informações', 'bolOutras', _sl('bol.outras'), 'texto', 3), fAt('Observações', 'bolObs', _sl('bol.obs'), 'texto', 3)] },
+      { tipo: 'grade', titulo: 'Camadas do solo (descrição tátil-visual, de cima para baixo)', add: '#bolCamada',
+        colunas: ['De (m)', 'Até (m)', 'Material', 'Complemento', 'Cor', 'Umidade'], idx: [0, 1, 2, 3, 4, 5],
+        tipos: ['num', 'num', 'texto', 'texto', 'texto', 'texto'],
+        linhas: [0, 1, 2, 3, 4, 5].map(k => [`Camada ${k + 1}`, c => `bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`, 'num', '',
+          c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`)]) },
+    ] },
+  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Amostra', campos: [fAt('Data de execução', 'data', _slc('dataEnsaio'), 'data'),
         fAt('Amostra total seca ao ar (g)', 'totalAr', _sl('totalAr')), fAt('Amostra parcial úmida (g)', 'parcial', _sl('parcialUmida'))] },
@@ -14349,7 +14373,7 @@ const FICHAS_SLAB = [
       { tipo: 'grade', par: true, titulo: 'Peneiramento fino — retido (g)', colunas: ['Retido (g)'], idx: [0],
         linhas: SLAB.PENEIRAS_FINO.map((p, k) => [`${p[0]} · ${p[1]}`, () => `finos.${k}`, 'num', 'g', () => _sl(`finos.${k}`)]) },
     ] },
-  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, densa: true, titulo: 'Solos — sedimentação e massa específica real', cabs: CAB_SL,
+  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L4', compacta: true, densa: true, titulo: 'Solos — sedimentação e massa específica real', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Sedimentação', campos: [fAt('Data de início', 'dataSed', _sl('ident.dataSed'), 'data'),
         fAt('Hora de início (hh:mm)', 'horaSed', _sl('ident.horaSed'), 'texto')] },
@@ -14361,7 +14385,7 @@ const FICHAS_SLAB = [
         linSl('Picnômetro nº', i => `pic.itens.${i}.numero`, 'texto'), linSl('Massa da amostra (g)', i => `pic.itens.${i}.amostra`),
         linSl('Picn. + amostra + água — P3 (g)', i => `pic.itens.${i}.p3`)] },
     ] },
-  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L4', titulo: 'Solos — limites de liquidez e plasticidade', cabs: CAB_SL,
+  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L5', titulo: 'Solos — limites de liquidez e plasticidade', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataLim', _sl('ident.dataLim'), 'data'),
         fAt('Cor da amostra', 'cor', _sl('ident.cor'), 'texto')] },
@@ -14372,7 +14396,7 @@ const FICHAS_SLAB = [
         linSl('Cápsula nº', i => `lp.${i}.capsula`, 'texto'), linSl('Cápsula + solo úmido (g)', i => `lp.${i}.umido`),
         linSl('Cápsula + solo seco (g)', i => `lp.${i}.seco`)] },
     ] },
-  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L5', compacta: true, densa: true, titulo: 'Solos — compactação (5 pontos)', cabs: CAB_SL,
+  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L6', compacta: true, densa: true, titulo: 'Solos — compactação (5 pontos)', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataComp', _sl('ident.dataComp'), 'data'),
         fAt('Energia', 'energia', _sl('ident.energia'), 'texto')] },
@@ -14384,7 +14408,7 @@ const FICHAS_SLAB = [
         linhas: P5SL.flatMap(i => [0, 1, 2].map(j => [`Ponto ${i + 1} · cáps. ${j + 1}`, c => `comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`, 'num', '',
           c => _sl(`comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`)])) },
     ] },
-  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L6', titulo: 'Solos — ISC (expansão e penetração)', cabs: CAB_SL,
+  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L7', titulo: 'Solos — ISC (expansão e penetração)', cabs: CAB_SL,
     blocos: [
       { tipo: 'campos', titulo: 'Prensa e imersão', campos: [fAt('Prensa nº', 'prensa', _sl('cbr.prensa'), 'texto'),
         fAt('Início da imersão', 'dataCbr', _sl('ident.dataCbr'), 'data')] },
@@ -14411,7 +14435,7 @@ function resumoSlab(c) {
     ip: q.lim.np ? null : q.lim.IP, np: q.lim.np, densReal: q.me.gs ?? null, umidadeHigro: q.hig.media ?? null,
     passantes: [...q.gr.grosso.slice(2), ...q.gr.fino].map(x => x.passa ?? null),
     pedregulho: q.fr.pedregulho ?? null, areia: q.fr.areia ?? null, silte: q.fr.silte ?? null, argila: q.fr.argila ?? null,
-    energia: id.energia || '', cliente: id.cliente || '', estudo: id.estudo || '', local: id.local || '', os: id.os || '',
+    energia: id.energia || '', cliente: id.cliente || '', estudo: id.estudo || '', local: id.local || '', os: [id.prefixo, id.os].filter(Boolean).join(' / '),
     nomeSolo: q.descricao || '',
     plano: (estado.slab.plano || {}).codigo || '', st: (estado.slab.plano || {}).st || '',
     partes: partesSlab(q),
@@ -14433,7 +14457,7 @@ function partesSlab(q) {
 /** O que muda de um ensaio para o outro fica; o cabeçalho da obra e as calibrações seguem para o próximo. */
 function novoSlabMantendo(anterior) {
   const novo = novoSlab(copiaSl(anterior.cfg));
-  ['cliente', 'os', 'estudo', 'laboratoristas', 'energia'].forEach(k => { novo.ident[k] = anterior.ident[k]; });
+  ['cliente', 'prefixo', 'os', 'estudo', 'laboratoristas', 'energia', 'local'].forEach(k => { novo.ident[k] = anterior.ident[k] || ''; });
   novo.cbr.prensa = anterior.cbr.prensa || novo.cbr.prensa;
   return novo;
 }
@@ -24462,7 +24486,8 @@ function preencherComPonto(p, pl) {
   Object.assign(estado.medicao, { registro: String(p.registro), furo: p.st, camada: profTexto(p.prof), obra: pl.obra || estado.medicao.obra,
     rodovia: pl.rodovia || estado.medicao.rodovia, dataEnsaio: estado.medicao.dataEnsaio });
   if (estado.slab) {
-    Object.assign(estado.slab.ident, { cliente: pl.cliente || estado.slab.ident.cliente, os: pl.os || estado.slab.ident.os,
+    const [prefixoPl, osPl] = separarPrefixoOs(pl.os);
+    Object.assign(estado.slab.ident, { cliente: pl.cliente || estado.slab.ident.cliente, prefixo: prefixoPl || estado.slab.ident.prefixo, os: osPl || estado.slab.ident.os,
       estudo: pl.estudo || estado.slab.ident.estudo, local: [p.km !== null ? 'KM ' + kmTexto(p.km) : '', pl.rodovia].filter(Boolean).join(' ').toUpperCase(),
       energia: normPl(pl.energia || estado.slab.ident.energia).startsWith('INTERMEDI') ? 'INTERMEDIÁRIA' : (pl.energia || estado.slab.ident.energia) });
     if (p.sondagem && p.sondagem.data && !estado.slab.ident.dataComp) estado.slab.ident.dataColeta = p.sondagem.data;
@@ -24709,7 +24734,7 @@ function cartaoImportacao(imp) {
     <div class="grid4">
       ${campo('codigo', 'Código do plano', imp.codigo)}${campo('nome', 'Nome', imp.nome)}
       ${campo('cliente', 'Cliente (contratante)', imp.cliente || '', 'Ex.: CONCESSIONÁRIA …')}${campo('obra', 'Obra', imp.obra || '')}
-      ${campo('os', 'Prefixo obra / OS Nº', imp.os || '')}${campo('estudo', 'Estudo', imp.estudo || 'ESTUDO DO SUBLEITO')}
+      ${campo('os', 'Prefixo da obra / Nº da OS', imp.os || '', 'Ex.: NE-2290 / OS 329')}${campo('estudo', 'Estudo', imp.estudo || 'ESTUDO DO SUBLEITO')}
       ${campo('rodovia', 'Rodovia', imp.rodovia)}${campo('energia', 'Energia da compactação', imp.energia)}
       <div><label>Fuso UTM das coordenadas</label><input type="number" data-plimp="fuso" value="${imp.fuso || 20}"></div>
     </div>
@@ -25453,7 +25478,7 @@ function svgPerfilBoletim(camadas, profFuro, so) {
    · do ponto do plano (o que o campo marcou no celular), para completar o que faltar.
    ------------------------------------------------------------ */
 const CAMPOS_BOL = ['data', 'sondador', 'prof', 'relevo', 'vegetacao', 'terreno', 'na', 'naSeco', 'parada', 'cota', 'outras', 'obs'];
-const vazioBol = () => ({ data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: false, parada: '', cota: null,
+const vazioBol = () => ({ data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: '', parada: '', cota: null,
   outras: '', obs: '', camadas: [] });
 const temValor = v => !(v === undefined || v === null || v === '' || v === false || (Array.isArray(v) && !v.length));
 const bolPreenchido = b => !!b && (temValor(b.data) || ehNumero(b.prof) || (b.camadas || []).length > 0 || temValor(b.relevo) || temValor(b.parada));
@@ -25462,7 +25487,7 @@ const bolPreenchido = b => !!b && (temValor(b.data) || ehNumero(b.prof) || (b.ca
 function bolDoPonto(p) {
   const so = sondagemDe(p);
   return { data: so.data || '', sondador: so.equipe || '', prof: ehNumero(so.prof) ? so.prof : null, relevo: so.relevo || '', vegetacao: so.vegetacao || '',
-    terreno: so.terreno || (so.naSeco ? 'seco' : ''), na: ehNumero(so.na) ? so.na : null, naSeco: !!so.naSeco, parada: so.parada || '',
+    terreno: so.terreno || (so.naSeco ? 'seco' : ''), na: ehNumero(so.na) ? so.na : null, naSeco: so.naSeco ? '1' : '', parada: so.parada || '',
     cota: ehNumero(so.cota) ? so.cota : null, outras: '', obs: so.obs || '', camadas: copiaCampo(so.camadas || []) };
 }
 /** Junta: o primeiro manda, o segundo completa o que estiver vazio. */
@@ -25496,10 +25521,16 @@ function bolParaPonto() {
 /** Cabeçalho do boletim: o do ensaio (Identificação) e, no que faltar, o do plano. */
 function cabBoletim(pl, est) {
   const id = (est && est.slab && est.slab.ident) || {}, m = (est && est.medicao) || {};
-  const os = String(id.os || (pl && pl.os) || '');
-  const partes = os.split('/').map(x => x.trim()).filter(Boolean);
+  const [prefixoPl, osPl] = separarPrefixoOs(pl && pl.os);
+  let prefixo = id.prefixo || '', ordem = id.os || '';
+  if (!prefixo && /\//.test(ordem)) [prefixo, ordem] = separarPrefixoOs(ordem);
   return { cliente: id.cliente || (pl && pl.cliente) || '', obra: m.obra || (pl && (pl.obra || pl.nome)) || '',
-    local: id.local || (pl && pl.rodovia) || '', prefixo: partes.length > 1 ? partes[0] : '', ordem: partes.length > 1 ? partes.slice(1).join(' / ') : (partes[0] || '') };
+    local: id.local || (pl && pl.rodovia) || '', prefixo: prefixo || prefixoPl, ordem: ordem || osPl, dataEnsaio: m.dataEnsaio || '' };
+}
+/** "NE-2290 / OS 329" → ['NE-2290', 'OS 329']; sem barra, é só a OS. */
+function separarPrefixoOs(t) {
+  const p = String(t || '').split('/').map(x => x.trim()).filter(Boolean);
+  return p.length > 1 ? [p[0], p.slice(1).join(' / ')] : ['', p[0] || ''];
 }
 
 /** Tudo o que a folha do boletim precisa, para um ponto do plano (com o ensaio dele, se houver). */
@@ -25537,7 +25568,7 @@ function htmlFolhaBoletim(d, folhaTxt = 'Única') {
         <td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">BOLETIM INDIVIDUAL DE SONDAGEM À TRADO - NBR 9603</div>
       <table class="id">
-        <tr><td class="r">Cliente:</td><td class="v" colspan="3">${atr(d.cliente)}</td><td class="r">Data de Execução:</td><td class="v d">${b.data ? dataBrSl(b.data) : ''}</td></tr>
+        <tr><td class="r">Cliente:</td><td class="v" colspan="3">${atr(d.cliente)}</td><td class="r">Data de Execução:</td><td class="v d">${(b.data || d.dataEnsaio) ? dataBrSl(b.data || d.dataEnsaio) : ''}</td></tr>
         <tr><td class="r">Obra:</td><td class="v" colspan="3">${atr(d.obra)}</td><td class="r">Nº Ordem de Serv.:</td><td class="v d">${atr(d.ordem)}</td></tr>
         <tr><td class="r">Local:</td><td class="v" colspan="3">${atr(d.local)}</td><td class="r">Prefixo da Obra:</td><td class="v d">${atr(d.prefixo)}</td></tr>
         <tr><td class="r">Sondador:</td><td class="v">${atr(b.sondador)}</td><td class="r dir">Profundidade do Furo (m):</td><td class="v">${ehNumero(prof) ? fmt(prof, 2) : ''}</td>
@@ -25643,8 +25674,9 @@ async function htmlBoletins(pl, pontos) {
 function htmlAbaBoletimSlab() {
   const s = estado.slab; if (!s) return '';
   s.bol = s.bol || vazioBol();
+  if (s.bol.naSeco === true) s.bol.naSeco = '1'; else if (s.bol.naSeco === false) s.bol.naSeco = '';
   const b = s.bol, d = dadosBoletimDoEnsaio(), p = d.p, so = d.so || {};
-  const op = (lista, pares) => [['', '—'], ...(pares ? lista : lista.map(x => [x, x]))];
+  const op = (lista, pares) => [['', ''], ...(pares ? lista : lista.map(x => [x, x]))];
   const camadas = (b.camadas || []).map((c, i) => `<div class="pl-cam">
       <div class="pl-cam-topo"><b>Camada ${i + 1}</b><button class="btn ghost sm" type="button" data-bolcamtira="${i}" title="Tirar camada">✕</button></div>
       <div class="pl-cam-grade">
@@ -25674,8 +25706,8 @@ function htmlAbaBoletimSlab() {
         <div><label>Relevo</label>${selSl('bol.relevo', op(RELEVOS))}</div>
         <div><label>Vegetação</label>${selSl('bol.vegetacao', op(VEGETACOES))}</div>
         <div><label>Terreno</label>${selSl('bol.terreno', op(TERRENOS, true))}</div>
-        <div><label>Nível d'água (m)</label>${b.naSeco ? '<input type="text" disabled value="SECO">' : nSl('bol.na', '0.01')}
-          <label class="pl-feito pl-seco"><input type="checkbox" data-sl="bol.naSeco" data-remonta="1"${b.naSeco ? ' checked' : ''}> Furo seco</label></div>
+        <div><label>Nível d'água</label>${selSl('bol.naSeco', [['', 'Encontrado / a medir'], ['1', 'Furo seco']]).replace('<select ', '<select data-remonta="1" ')}</div>
+        <div><label>Prof. do nível d'água (m)</label>${b.naSeco ? '<input type="text" disabled value="SECO">' : nSl('bol.na', '0.01')}</div>
         <div style="grid-column:span 2"><label>Furo paralisado por</label>${selSl('bol.parada', op(PARADAS, true))}</div>
         <div style="grid-column:span 2"><label>Outras informações <span class="hint">em branco: km, amostra e hora do furo</span></label>${tSl('bol.outras', '', false)}</div>
         <div style="grid-column:span 4"><label>Observações</label>${tSl('bol.obs', '', false)}</div>
