@@ -365,7 +365,7 @@ details.detalhe-class[open] > summary::before{content:"▾";}
 #faixaVersao{
   /* fica ACIMA da barra de lançamento: encostada no rodapé, os botões da
      faixa ficavam por baixo da navegação e não recebiam o toque */
-  position:fixed; left:12px; right:12px; bottom:calc(74px + var(--safe-b)); z-index:70;
+  position:fixed; left:12px; right:12px; bottom:calc(74px + var(--safe-b)); z-index:9880;   /* acima da tela de entrada: dá para atualizar sem estar logado */
   display:none; align-items:center; gap:11px; flex-wrap:wrap;
   padding:12px 14px; border-radius:var(--radius);
   background:var(--mk-topo); color:var(--mk-sobre-topo);
@@ -24858,9 +24858,24 @@ function mostrarAvisoDeVersao(trabalhador) {
   faixa.classList.add('visivel');
 }
 
-function aplicarVersaoNova() {
-  if (!esperandoTroca) { location.reload(); return; }
-  esperandoTroca.postMessage({ tipo: 'assumir' });
+/**
+ * "Atualizar agora". Com várias versões publicadas seguidas, a versão guardada em
+ * `esperandoTroca` pode já ter sido trocada por outra mais nova (fica "redundant" e
+ * não responde) — o botão parecia não fazer nada. Agora pega a versão que está
+ * esperando de verdade e, se a troca não acontecer em 3 s, desliga o trabalhador
+ * antigo e recarrega da internet (os ensaios e o login ficam: estão no aparelho).
+ */
+async function aplicarVersaoNova() {
+  const b = $('btnAtualizarAgora');
+  if (b) { b.disabled = true; b.textContent = 'Atualizando…'; }
+  let registro = null, w = esperandoTroca;
+  try { registro = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); } catch (e) {}
+  if (registro && registro.waiting) w = registro.waiting;
+  if (w && w.state !== 'redundant') { try { w.postMessage({ tipo: 'assumir' }); } catch (e) {} }
+  setTimeout(async () => {
+    try { if (registro) await registro.unregister(); } catch (e) {}
+    location.reload();
+  }, w ? 3000 : 0);
 }
 
 function adiarVersaoNova() {
