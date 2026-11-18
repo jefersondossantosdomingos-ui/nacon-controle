@@ -933,6 +933,21 @@ body.com-entrada{overflow:hidden;}
 #entradaCampos[hidden]{display:none;}
 .entrada-outro{background:none; border:0; color:var(--text-mut); text-decoration:underline; font:inherit; font-size:12px; cursor:pointer; margin-top:4px;}
 @media print{ .tela-entrada{display:none !important;} }
+/* login individual, termo de uso e privacidade, equipe e acessos */
+body.com-acesso{overflow:hidden;}
+#telaAcesso{z-index:9850;} #telaTermos{z-index:9900;}
+.entrada-individual{display:flex; flex-direction:column; gap:8px;}
+.entrada-individual .btn{margin-top:10px; padding:12px; font-size:16px;}
+.entrada-sep{margin:14px 0 0; padding-top:12px; border-top:1px solid var(--border); font-size:12.5px; font-weight:700; color:var(--text-mut); text-align:center;}
+.termos-caixa{max-width:640px;}
+.termos-rolagem{max-height:55vh; overflow:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 14px; background:var(--card-2);}
+.termos h3{font-size:15px; margin:12px 0 6px;} .termos p, .termos li{font-size:13.5px; line-height:1.45;} .termos ul{padding-left:18px; margin:6px 0;}
+.termos-aceite{display:flex; gap:8px; align-items:flex-start; font-weight:700; margin-top:10px;} .termos-aceite input{width:auto; margin-top:3px;}
+.seg-sair{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);}
+.seg-sair .aviso{flex-basis:100%;} .seg-sair .aviso input{display:inline-block; width:auto;}
+.seg-tab{width:100%; border-collapse:collapse; font-size:13px;} .seg-tab th, .seg-tab td{padding:6px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top;}
+.seg-acoes{white-space:nowrap;} .seg-senha{display:flex; gap:6px; margin-top:6px;} .seg-senha input{max-width:150px;}
+.seg-novo{margin-top:12px;} .seg-novo summary{display:inline-flex; list-style:none; cursor:pointer;} .seg-novo summary::-webkit-details-marker{display:none;}
 /* foto do rascunho anexada na aba (para o analista) */
 .anexos-bloco{margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);}
 .anexos-bloco h3{font-size:14px; margin:0 0 4px;}
@@ -21223,6 +21238,7 @@ function alternarLista(chave) {
    ------------------------------------------------------------ */
 
 function gravarHistorico() {
+  if (window.__apagandoAparelho) return;     // apagando os dados do aparelho: nada volta a ser gravado
   try {
     localStorage.setItem(CHAVE_ARMAZEM, JSON.stringify(historico));
     $('histAviso').innerHTML = '';
@@ -23216,7 +23232,7 @@ function lerBancoGravado() {
   try { const b = JSON.parse(localStorage.getItem(CHAVE_BANCO) || 'null'); return b ? { ...BANCO_PADRAO, ...b } : null; }
   catch (e) { return null; }
 }
-function gravarBanco() { try { localStorage.setItem(CHAVE_BANCO, JSON.stringify(banco)); } catch (e) {} }
+function gravarBanco() { if (window.__apagandoAparelho) return; try { localStorage.setItem(CHAVE_BANCO, JSON.stringify(banco)); } catch (e) {} }
 function bancoLigado() { return !!(CFG_BANCO && banco.sessao && banco.perfil); }
 /** Quem está usando o celular: no login do grupo (senha padrão) é o nome que a pessoa digitou. */
 function nomePessoa() { return (banco.pessoa || (banco.perfil && banco.perfil.nome) || '').toUpperCase(); }
@@ -23248,9 +23264,11 @@ async function pedidoBanco(caminho, { metodo = 'GET', corpo, cab = {}, login = t
   finally { clearTimeout(relogio); }
   if (!r.ok) {
     let msg = `O banco respondeu ${r.status}.`;
-    try { const j = await r.json(); msg = j.message || j.msg || j.error_description || j.erro || j.error || msg; } catch (e) {}
+    let codigo = '';
+    try { const j = await r.json(); msg = j.message || j.msg || j.error_description || j.erro || j.error || msg; codigo = j.error_code || j.code || ''; } catch (e) {}
+    if (/banned/i.test(msg)) codigo = 'user_banned';
     const erro = new Error(traduzirErroBanco(msg));
-    erro.status = r.status;
+    erro.status = r.status; erro.codigo = codigo;
     throw erro;
   }
   if (blob) return r.blob();
@@ -23260,7 +23278,8 @@ async function pedidoBanco(caminho, { metodo = 'GET', corpo, cab = {}, login = t
 
 function traduzirErroBanco(m) {
   const s = String(m || '');
-  if (/Invalid login credentials/i.test(s)) return 'E-mail ou senha incorretos.';
+  if (/Invalid login credentials/i.test(s)) return 'Usuário ou senha incorretos.';
+  if (/banned/i.test(s)) return 'Este acesso foi bloqueado pelo gestor.';
   if (/Email not confirmed/i.test(s)) return 'E-mail ainda não confirmado (no Supabase, marque "Auto Confirm User").';
   if (/row-level security/i.test(s)) return 'O banco recusou: este usuário não tem acesso a esse dado.';
   if (/JWT expired|invalid JWT/i.test(s)) return 'Sessão vencida — entre de novo.';
@@ -23276,7 +23295,9 @@ async function renovarSessaoBanco() {
     banco.sessao = sessaoDe(r);
     gravarBanco();
   } catch (e) {
-    if (e.status === 400 || e.status === 401) { banco.sessao = null; gravarBanco(); montarBanco(); throw new Error('Sessão vencida — entre de novo com seu e-mail e senha.'); }
+    // pessoa bloqueada pelo gestor: o aparelho apaga os dados do app
+    if (e.codigo === 'user_banned' && typeof acessoBloqueado === 'function') { await acessoBloqueado(); throw e; }
+    if (e.status === 400 || e.status === 401) { banco.sessao = null; gravarBanco(); montarBanco(); throw new Error('Sessão vencida — entre de novo com seu usuário e senha.'); }
     throw e;
   }
 }
@@ -23294,25 +23315,31 @@ async function entrarNoBanco(email, senha, { pessoa = '', papelEsperado = '' } =
   if (!email || !senha) throw new Error('Preencha e-mail e senha.');
   const r = await pedidoBanco('/auth/v1/token?grant_type=password', { metodo: 'POST', corpo: { email, password: String(senha) }, login: false });
   banco.sessao = sessaoDe(r);
-  const p = await pedidoBanco(`/rest/v1/perfis?id=eq.${banco.sessao.user.id}&select=nome,papel,ativo,empresa_id,empresas(sigla,nome,ativa)`);
+  let p;
+  try { p = await pedidoBanco(`/rest/v1/perfis?id=eq.${banco.sessao.user.id}&select=nome,papel,ativo,grupo,empresa_id,empresas(sigla,nome,ativa)`); }
+  catch (e) { p = await pedidoBanco(`/rest/v1/perfis?id=eq.${banco.sessao.user.id}&select=nome,papel,ativo,empresa_id,empresas(sigla,nome,ativa)`); }   // banco sem o script 11
   const perfil = p && p[0];
   const sair = msg => { banco.sessao = null; gravarBanco(); throw new Error(msg); };
   if (!perfil) return sair('Este usuário ainda não está ligado a uma empresa (rode o 02-equipe.sql no Supabase).');
-  if (!perfil.ativo) return sair('Este usuário está desativado.');
+  if (!perfil.ativo) return sair(perfil.grupo ? 'O acesso pela senha do grupo foi desligado. Entre com o seu usuário.' : 'Este acesso está bloqueado. Fale com o gestor.');
   const emp = perfil.empresas || {};
   if (CFG_BANCO.empresa && emp.sigla && emp.sigla !== CFG_BANCO.empresa)
     return sair(`Este usuário é da ${emp.sigla}, não deste app.`);
   // trocou de pessoa no mesmo aparelho: começa a sincronia do zero
   const outro = !banco.perfil || banco.perfil.id !== banco.sessao.user.id;
   banco.perfil = { id: banco.sessao.user.id, email, nome: String(perfil.nome || email).toUpperCase(), papel: perfil.papel,
-                   empresa_id: perfil.empresa_id, sigla: emp.sigla || '', empresa: emp.nome || '' };
+                   empresa_id: perfil.empresa_id, sigla: emp.sigla || '', empresa: emp.nome || '', grupo: !!perfil.grupo };
   if (papelEsperado === 'gestor' && !APROVA(perfil.papel)) return sair('Esta senha não é a do gestor.');
   if (papelEsperado === 'laboratorista' && perfil.papel !== 'laboratorista') return sair('Esta senha não é a do laboratorista.');
   if (outro) Object.assign(banco, { ultimaSincronia: '', marcaServidor: '', noServidor: {}, falhas: [], pisBase: null });
   banco.pessoa = String(pessoa || '').trim().toUpperCase();
   banco.ultimoErro = null;
+  banco.acesso = null;
+  banco.ultimoUso = new Date().toISOString();
   gravarBanco();
   aplicarPapelBanco();
+  // troca da senha provisória e aceite do termo (tela por cima do app, se faltar)
+  if (typeof conferirAcesso === 'function') await conferirAcesso().catch(() => null);
   return banco.perfil;
 }
 
@@ -23330,8 +23357,10 @@ function aplicarPapelBanco() {
 async function sairDoBanco() {
   try { if (banco.sessao) await pedidoBanco('/auth/v1/logout', { metodo: 'POST' }); } catch (e) {}
   try { const a = JSON.parse(localStorage.getItem(ESPACO_ARMAZEM + '.analista') || 'null'); if (a && a.banco) localStorage.removeItem(ESPACO_ARMAZEM + '.analista'); } catch (e) {}
-  banco.sessao = null;
+  banco.sessao = null; banco.acesso = null;
+  if (typeof EQUIPE === 'object') EQUIPE.lista = null;
   gravarBanco();
+  if (typeof montarTelaAcesso === 'function') montarTelaAcesso();
 }
 
 /* ------------------------------------------------------------
@@ -23422,6 +23451,10 @@ async function sincronizarBanco({ silencioso = false } = {}) {
   montarBanco();
   if (!silencioso) avisarBanco('andamento', 'Conversando com o banco de dados…');
   try {
+    // 0 · o acesso continua valendo? (bloqueado pelo gestor, senha do grupo desligada, termo novo)
+    if (typeof conferirAcesso === 'function') { try { await conferirAcesso(); } catch (e) { /* sem sinal: segue */ } }
+    if (window.__apagandoAparelho) return;
+    if (!bancoLigado()) return null;
     // 1 · as fotos primeiro: o ensaio sobe já sabendo onde elas estão
     if (typeof enviarAnexosPendentes === 'function') await enviarAnexosPendentes().catch(() => 0);
 
@@ -23637,11 +23670,20 @@ function montarTelaEntrada() {
   t.id = 'telaEntrada'; t.className = 'tela-entrada';
   const logo = typeof logoAtual === 'function' ? logoAtual() : '';
   const lembrado = banco.pessoa || '';
-  const grupo = !!LOGINS_GRUPO;
+  const grupo = typeof LOGIN_GRUPO_LIGADO === 'function' ? LOGIN_GRUPO_LIGADO() : !!LOGINS_GRUPO;
+  const usuarioLembrado = (banco.perfil && !banco.perfil.grupo && banco.perfil.email && !ehLoginGrupo()) ? String(banco.perfil.email).replace(new RegExp('\\.' + (CFG_BANCO.empresa || '').toLowerCase() + '@jsd\\.app$'), '') : '';
   t.innerHTML = `<form class="entrada-caixa" id="formEntrada" autocomplete="on">
       ${logo ? `<img class="entrada-logo" src="${logo}" alt="">` : ''}
       <h1>${atr((MARCA && MARCA.nomeApp) || 'Controle Tecnológico')}</h1>
-      ${grupo ? `<div class="entrada-papeis" role="radiogroup" aria-label="Quem vai usar">
+      <div id="entradaIndividual" class="entrada-individual">
+        <label for="entradaUsuario">Usuário</label>
+        <input type="text" id="entradaUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" value="${atr(usuarioLembrado)}" placeholder="ex.: joao.silva">
+        <label for="entradaSenhaU">Senha</label>
+        <div class="entrada-senha"><input type="password" id="entradaSenhaU" autocomplete="current-password">
+          <button type="button" class="btn ghost sm" id="entradaVerU" aria-label="Mostrar senha">ver</button></div>
+        <button class="btn" type="button" id="entradaBtnU">Entrar</button>
+      </div>
+      ${grupo ? `<p class="entrada-sep">Acesso provisório da equipe (senha do grupo)</p><div class="entrada-papeis" role="radiogroup" aria-label="Quem vai usar">
           <button type="button" class="entrada-papel" data-papel="laboratorista">Laboratorista<small>lança e envia</small></button>
           <button type="button" class="entrada-papel" data-papel="gestor">Gestor<small>confere e aprova</small></button></div>` : ''}
       <div id="entradaCampos"${grupo ? ' hidden' : ''}>
@@ -23656,7 +23698,8 @@ function montarTelaEntrada() {
       </div>
       <div id="entradaAviso"></div>
       ${grupo ? `<button type="button" class="entrada-outro" id="entradaOutro">Entrar com e-mail (administrador)</button>` : ''}
-      <p class="hint entrada-pe">Primeira vez neste celular? Precisa de internet. As senhas são passadas pelo administrador.</p>
+      <p class="hint entrada-pe">Primeira vez neste celular? Precisa de internet. O usuário e a senha provisória são passados pelo gestor.
+        <br><a href="#" id="entradaTermos">Termo de uso e privacidade</a></p>
     </form>`;
   document.body.appendChild(t);
   document.body.classList.add('com-entrada');
@@ -23675,6 +23718,25 @@ function montarTelaEntrada() {
   };
   t.querySelectorAll('.entrada-papel').forEach(x => { x.onclick = () => mostrar(x.dataset.papel); });
   if ($('entradaOutro')) $('entradaOutro').onclick = () => mostrar('');
+  $('entradaVerU').onclick = () => { const i = $('entradaSenhaU'); i.type = i.type === 'password' ? 'text' : 'password'; };
+  const entrarIndividual = async () => {
+    const b = $('entradaBtnU');
+    const aviso = msg => { $('entradaAviso').innerHTML = `<div class="aviso erro"><span class="ico">✕</span><span>${atr(msg)}</span></div>`; };
+    const u = $('entradaUsuario').value.trim(), s = $('entradaSenhaU').value;
+    if (!u) return aviso('Escreva o seu usuário.');
+    if (!s) return aviso('Digite a senha.');
+    b.disabled = true; b.textContent = 'Entrando…'; $('entradaAviso').innerHTML = '';
+    try {
+      if (navigator.onLine === false) throw new Error('Sem internet. Para entrar pela primeira vez, conecte o celular.');
+      await entrarNoBanco(emailDoUsuario(u), s);
+      montarTelaEntrada(); montarBanco();
+      if (typeof montarAprovacao === 'function') montarAprovacao();
+      avisarBanco('ok', `Bem-vindo(a), <b>${atr(nomePessoa())}</b> — ${PAPEIS_BANCO[banco.perfil.papel] || banco.perfil.papel}.`);
+      sincronizarBanco({ silencioso: true });
+    } catch (e) { aviso(e.message); b.disabled = false; b.textContent = 'Entrar'; }
+  };
+  $('entradaBtnU').onclick = entrarIndividual;
+  $('entradaSenhaU').onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); entrarIndividual(); } };
   $('entradaVer').onclick = () => { const i = $('entradaSenha'); i.type = i.type === 'password' ? 'text' : 'password'; };
   $('formEntrada').onsubmit = async ev => {
     ev.preventDefault();
@@ -23697,7 +23759,7 @@ function montarTelaEntrada() {
       b.disabled = false; b.textContent = 'Entrar';
     }
   };
-  if (!grupo) setTimeout(() => { const i = $('entradaEmail').value ? $('entradaSenha') : $('entradaEmail'); if (i) i.focus(); }, 50);
+  setTimeout(() => { const i = $('entradaUsuario').value ? $('entradaSenhaU') : $('entradaUsuario'); if (i && !navigator.webdriver) i.focus(); }, 50);
 }
 
 function avisarBanco(tipo, msg) {
@@ -23727,7 +23789,7 @@ function montarBanco() {
     corpo.innerHTML = `<details id="bancoEntrar"><summary class="hint" style="cursor:pointer"><b>Entrar</b> com o seu e-mail e senha</summary>
       <p class="hint" style="margin:10px 0 12px">Cada pessoa entra com o <b>próprio e-mail e senha</b> (cadastrados pelo administrador).
         O papel — laboratorista ou gestor — vem do cadastro: o gestor confere e aprova os ensaios.</p>
-      <div class="grid4"><div style="grid-column:span 2"><label>E-mail</label><input type="email" id="bancoEmail" autocomplete="username" ${p ? `value="${atr(p.email)}"` : ''}></div>
+      <div class="grid4"><div style="grid-column:span 2"><label>Usuário ou e-mail</label><input type="text" id="bancoEmail" autocomplete="username" autocapitalize="none" ${p ? `value="${atr(p.email)}"` : ''}></div>
         <div style="grid-column:span 2"><label>Senha</label><input type="password" id="bancoSenha" autocomplete="current-password"></div></div>
       <div style="display:flex; gap:9px; flex-wrap:wrap; margin-top:12px"><button class="btn" type="button" id="btnEntrarBanco">Entrar</button></div></details>`;
     return;
@@ -23738,7 +23800,9 @@ function montarBanco() {
       Os ensaios vão para o banco a cada <b>Salvar</b>, ao abrir o app e quando o sinal volta.</p>
     <div style="display:flex; gap:9px; flex-wrap:wrap">
       <button class="btn" type="button" id="btnSincBanco"${sincronizandoBanco ? ' disabled' : ''}>${sincronizandoBanco ? 'Sincronizando…' : 'Sincronizar agora'}</button>
-      <button class="btn ghost sm perigo" type="button" id="btnSairBanco">Sair</button></div>`;
+      <button class="btn ghost sm perigo" type="button" id="btnSairBanco">Sair</button></div>
+    ${typeof htmlSairApagar === 'function' ? htmlSairApagar() : ''}`;
+  if (typeof montarSeguranca === 'function') montarSeguranca();
 }
 
 document.addEventListener('click', async ev => {
@@ -23747,7 +23811,7 @@ document.addEventListener('click', async ev => {
   if (t.id === 'btnEntrarBanco') {
     t.disabled = true; avisarBanco('andamento', 'Entrando…');
     try {
-      await entrarNoBanco(($('bancoEmail') || {}).value, ($('bancoSenha') || {}).value);
+      await entrarNoBanco(emailDoUsuario(($('bancoEmail') || {}).value), ($('bancoSenha') || {}).value);
       montarBanco(); if (typeof montarAprovacao === 'function') montarAprovacao();
       avisarBanco('ok', `Bem-vindo(a), <b>${atr(banco.perfil.nome)}</b>.`);
       sincronizarBanco({ silencioso: false });
@@ -23863,6 +23927,7 @@ if (CFG_BANCO) {
   // o que os outros lançam chega sozinho: ao voltar para o app e a cada 15 s com ele aberto
   // (só busca o que mudou desde a última vez — é leve)
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && typeof marcarUso === 'function') marcarUso();
     if (document.visibilityState === 'visible' && bancoLigado()) sincronizarBanco({ silencioso: true });
   });
   setInterval(() => {
@@ -23873,9 +23938,443 @@ if (CFG_BANCO) {
 function iniciarBanco() {
   if (!CFG_BANCO) { montarBanco(); return; }
   banco = lerBancoGravado() || { ...BANCO_PADRAO };
+  // sem abrir o app há mais de DIAS_SESSAO dias: pede o login de novo (os dados ficam no aparelho)
+  if (typeof sessaoVencidaPorFaltaDeUso === 'function' && sessaoVencidaPorFaltaDeUso()) { banco.sessao = null; banco.acesso = null; gravarBanco(); }
+  if (typeof marcarUso === 'function') marcarUso();
   aplicarPapelBanco();
   montarBanco();
+  if (typeof montarTelaAcesso === 'function') montarTelaAcesso();
+  if (typeof recadoDoApagamento === 'function') recadoDoApagamento();
   if (bancoLigado()) setTimeout(() => sincronizarBanco({ silencioso: true }), 1500);
+}
+/* ============================================================
+   SEGURANÇA E PROTEÇÃO DE DADOS (LGPD) — 18/11/2026
+   · login individual (usuário + senha); o gestor cadastra a equipe
+     pela função "equipe" do Supabase (a chave secreta fica lá);
+   · troca da senha inicial no primeiro acesso;
+   · aceite do termo de uso e da política de privacidade (por pessoa,
+     gravado no banco com data e versão);
+   · registro de alterações (auditoria) para o gestor;
+   · cópia de segurança (download) e conferência da cópia;
+   · "Sair e apagar dados deste aparelho", sessão que expira sem uso
+     e aparelho de pessoa bloqueada que se apaga sozinho.
+   ============================================================ */
+
+const TERMO_VERSAO = '2026-11-18';
+const DIAS_SESSAO = 15;                                   // sem abrir o app por mais que isso, pede o login de novo
+const CONTATO_DADOS = (typeof MARCA === 'object' && MARCA && MARCA.contatoDados) || 'eng.controle.tecnologico@gmail.com';
+const OPERADORA = (typeof MARCA === 'object' && MARCA && MARCA.operadora) || 'JSD ENGENHARIA LTDA';
+const LOGIN_GRUPO_LIGADO = () => !!LOGINS_GRUPO && !(typeof MARCA === 'object' && MARCA && MARCA.loginGrupo === false);
+const siglaLogin = () => String((CFG_BANCO && CFG_BANCO.empresa) || '').toLowerCase();
+/** "joao.silva" → joao.silva.nacon@jsd.app (o e-mail é só um nome interno). Com @, vale como está. */
+const emailDoUsuario = u => { const t = String(u || '').trim().toLowerCase(); return !t || t.includes('@') ? t : `${t}.${siglaLogin()}@jsd.app`; };
+const senhaForte = s => typeof s === 'string' && s.length >= 8 && /[A-Za-z]/.test(s) && /\d/.test(s);
+
+/* ------------------------------------------------------------
+   Termo de uso e política de privacidade (texto mostrado no app)
+   ------------------------------------------------------------ */
+function htmlTermos() {
+  const emp = atr((MARCA && MARCA.empresa) || 'a empresa contratante');
+  return `<div class="termos">
+    <h3>Termo de uso</h3>
+    <p>Este aplicativo é a ferramenta de controle tecnológico de <b>${emp}</b>, fornecida e mantida por <b>${atr(OPERADORA)}</b>.
+      Ele serve para lançar, calcular, conferir, aprovar e emitir ensaios de laboratório e de campo.</p>
+    <ul>
+      <li>O acesso é <b>pessoal e intransferível</b>. Não compartilhe a sua senha. Tudo o que for gravado com o seu usuário fica registrado em seu nome.</li>
+      <li>Os cálculos seguem as normas indicadas em cada folha. <b>A conferência e a responsabilidade técnica</b> pelos resultados e laudos são do profissional habilitado que os aprova e assina.</li>
+      <li>A leitura de fichas por foto é uma <b>sugestão</b>: os valores só entram no ensaio depois que você confere e aplica.</li>
+      <li>Ensaios aprovados ficam registrados com data, hora e autor. Toda alteração, aprovação, devolução e exclusão fica no <b>registro de alterações</b>.</li>
+      <li>Em caso de perda ou roubo do aparelho, avise o gestor: ele bloqueia o seu acesso e os dados do aparelho são apagados assim que ele se conectar.</li>
+    </ul>
+    <h3>Política de privacidade (LGPD — Lei 13.709/2018)</h3>
+    <p><b>Quem trata os dados.</b> Controladora: <b>${emp}</b>. Operadora: <b>${atr(OPERADORA)}</b>, que hospeda e mantém o aplicativo por conta da controladora.</p>
+    <p><b>Quais dados.</b> Nome, usuário e função de quem usa o app; data, hora e autor de cada lançamento, envio e aprovação;
+      fotos tiradas no app (fichas de rascunho, campo e obra), que podem trazer data, hora e coordenada GPS gravadas na imagem;
+      a localização do aparelho, só quando você toca para registrar um ponto ou tirar uma foto de campo; os dados técnicos das obras e dos ensaios.</p>
+    <p><b>Para quê.</b> Executar o contrato de controle tecnológico, comprovar a rastreabilidade dos ensaios (quem fez, onde e quando),
+      cumprir obrigações técnicas e legais e garantir a segurança do sistema.</p>
+    <p><b>Onde ficam e com quem são compartilhados.</b> No banco de dados em nuvem (Supabase) e numa cópia neste aparelho, para funcionar sem sinal.
+      Quando você usa a leitura por foto, a imagem da ficha é enviada para processamento por inteligência artificial (Anthropic) só para transcrever os valores.
+      Os relatórios são entregues ao cliente da obra. Os dados não são vendidos nem usados para propaganda.</p>
+    <p><b>Por quanto tempo.</b> Enquanto durar o contrato e pelo prazo exigido para guarda de documentos técnicos e de responsabilidade profissional; depois, são apagados ou devolvidos à controladora.</p>
+    <p><b>Segurança.</b> Acesso por usuário e senha individuais, separação dos dados por empresa no banco, registro de alterações, cópias de segurança e apagamento remoto do aparelho de quem for bloqueado.</p>
+    <p><b>Seus direitos.</b> Você pode pedir acesso, correção, informação sobre o compartilhamento e a eliminação dos seus dados pessoais, nos limites da lei.
+      Encarregado de dados: <b>${atr(CONTATO_DADOS)}</b>.</p>
+    <p class="hint">Versão ${TERMO_VERSAO}.</p>
+  </div>`;
+}
+
+/* ------------------------------------------------------------
+   Depois do login: conferir o acesso (ativo, troca de senha, termo)
+   ------------------------------------------------------------ */
+async function conferirAcesso() {
+  if (!bancoLigado()) return null;
+  let a;
+  try { a = await pedidoBanco('/rest/v1/rpc/meu_acesso', { metodo: 'POST', corpo: {} }); }
+  catch (e) {
+    if (e.codigo === 'user_banned') { await acessoBloqueado(); return null; }
+    if (e.status === 404) return null;                 // o banco ainda não tem o script 11: segue como antes
+    throw e;
+  }
+  if (!a) return null;
+  banco.acesso = a; gravarBanco();
+  if (a.ativo === false) {
+    if (a.grupo) {                                     // fim da transição: a senha do grupo foi desligada (os dados ficam)
+      await sairDoBanco(); montarBanco();
+      setTimeout(() => { const av = $('entradaAviso'); if (av) av.innerHTML = '<div class="aviso erro"><span class="ico">✕</span><span>O acesso pela senha do grupo foi desligado. Entre com o seu usuário.</span></div>'; }, 50);
+    } else await acessoBloqueado();
+    return null;
+  }
+  montarTelaAcesso();
+  return a;
+}
+
+/** Acesso bloqueado pelo gestor: o aparelho apaga os dados do app e volta à tela de entrada. */
+async function acessoBloqueado() {
+  await apagarDadosDoAparelho({ sair: false });
+  try { sessionStorage.setItem('acesso-bloqueado', '1'); } catch (e) {}
+  location.reload();
+}
+
+function precisaTelaAcesso() {
+  const a = banco.acesso;
+  // nos testes automáticos a tela só aparece quando o teste pede (__comAcesso), como a de entrada
+  if (navigator.webdriver && !window.__comAcesso) return false;
+  return !!(bancoLigado() && a && (a.trocar_senha || a.aceite_versao !== TERMO_VERSAO));
+}
+
+/** Tela por cima do app: primeiro a senha nova (se o gestor deu uma provisória), depois o termo. */
+function montarTelaAcesso() {
+  let t = $('telaAcesso');
+  if (!precisaTelaAcesso()) { if (t) t.remove(); document.body.classList.remove('com-acesso'); return; }
+  const a = banco.acesso, etapa = a.trocar_senha ? 'senha' : 'termo';
+  if (t && t.dataset.etapa === etapa) return;
+  if (!t) { t = document.createElement('div'); t.id = 'telaAcesso'; t.className = 'tela-entrada'; document.body.appendChild(t); }
+  t.dataset.etapa = etapa;
+  document.body.classList.add('com-acesso');
+  if (etapa === 'senha') {
+    t.innerHTML = `<form class="entrada-caixa" id="formSenhaNova">
+      <h1>Crie a sua senha</h1>
+      <p class="hint">Olá, <b>${atr(a.nome || '')}</b>. A senha que você recebeu é provisória: crie agora uma senha só sua
+        (mínimo de 8 caracteres, com letras e números). Ela não é mostrada a ninguém, nem ao gestor.</p>
+      <label for="senhaNova1">Senha nova</label><input type="password" id="senhaNova1" autocomplete="new-password">
+      <label for="senhaNova2">Repita a senha</label><input type="password" id="senhaNova2" autocomplete="new-password">
+      <button class="btn" type="submit" id="senhaNovaBtn">Gravar senha</button>
+      <div id="senhaNovaAviso"></div></form>`;
+    $('formSenhaNova').onsubmit = async ev => {
+      ev.preventDefault();
+      const s1 = $('senhaNova1').value, s2 = $('senhaNova2').value, av = $('senhaNovaAviso'), b = $('senhaNovaBtn');
+      const erro = m => { av.innerHTML = `<div class="aviso erro"><span class="ico">✕</span><span>${atr(m)}</span></div>`; };
+      if (!senhaForte(s1)) return erro('A senha precisa de no mínimo 8 caracteres, com letras e números.');
+      if (s1 !== s2) return erro('As duas senhas não são iguais.');
+      b.disabled = true; b.textContent = 'Gravando…';
+      try {
+        await pedidoBanco('/auth/v1/user', { metodo: 'PUT', corpo: { password: s1 } });
+        banco.acesso = await pedidoBanco('/rest/v1/rpc/senha_trocada', { metodo: 'POST', corpo: {} }) || { ...a, trocar_senha: false };
+        gravarBanco(); montarTelaAcesso();
+      } catch (e) { erro(e.message); b.disabled = false; b.textContent = 'Gravar senha'; }
+    };
+    setTimeout(() => $('senhaNova1').focus(), 30);
+    return;
+  }
+  t.innerHTML = `<form class="entrada-caixa termos-caixa" id="formTermo">
+      <h1>Termo de uso e privacidade</h1>
+      <div class="termos-rolagem">${htmlTermos()}</div>
+      <label class="termos-aceite"><input type="checkbox" id="termoLi"> Li e aceito o termo de uso e a política de privacidade.</label>
+      <button class="btn" type="submit" id="termoBtn" disabled>Continuar</button>
+      <div id="termoAviso"></div></form>`;
+  $('termoLi').onchange = () => { $('termoBtn').disabled = !$('termoLi').checked; };
+  $('formTermo').onsubmit = async ev => {
+    ev.preventDefault();
+    const b = $('termoBtn'); b.disabled = true; b.textContent = 'Gravando…';
+    try {
+      banco.acesso = await pedidoBanco('/rest/v1/rpc/aceitar_termos', { metodo: 'POST', corpo: { p_versao: TERMO_VERSAO } }) || { ...a, aceite_versao: TERMO_VERSAO };
+      gravarBanco(); montarTelaAcesso();
+    } catch (e) {
+      $('termoAviso').innerHTML = `<div class="aviso erro"><span class="ico">✕</span><span>${atr(e.message)}</span></div>`;
+      b.disabled = false; b.textContent = 'Continuar';
+    }
+  };
+}
+
+/** Só leitura: o termo e a política, a qualquer momento (tela de entrada e Histórico). */
+function abrirTermos() {
+  let t = $('telaTermos');
+  if (t) t.remove();
+  t = document.createElement('div'); t.id = 'telaTermos'; t.className = 'tela-entrada';
+  t.innerHTML = `<div class="entrada-caixa termos-caixa"><h1>Termo de uso e privacidade</h1>
+    <div class="termos-rolagem">${htmlTermos()}</div>
+    ${banco.acesso && banco.acesso.aceite_em ? `<p class="hint">Aceito por você em ${atr(instanteTexto(banco.acesso.aceite_em))}.</p>` : ''}
+    <button class="btn" type="button" id="termosFechar">Fechar</button></div>`;
+  document.body.appendChild(t);
+  $('termosFechar').onclick = () => t.remove();
+}
+
+/* ------------------------------------------------------------
+   Sessão que expira sem uso
+   ------------------------------------------------------------ */
+function sessaoVencidaPorFaltaDeUso() {
+  const u = Date.parse(banco.ultimoUso || '');
+  return bancoLigado() && isFinite(u) && Date.now() - u > DIAS_SESSAO * 86400000;
+}
+function marcarUso() { if (bancoLigado()) { banco.ultimoUso = new Date().toISOString(); gravarBanco(); } }
+
+/* ------------------------------------------------------------
+   Sair e apagar os dados deste aparelho
+   ------------------------------------------------------------ */
+function pendentesDoAparelho() {
+  const ens = (typeof historico !== 'undefined' ? historico : []).filter(e => e.pendente).length;
+  const pl = (typeof PLANOS === 'object' && PLANOS && Array.isArray(PLANOS.pendentes)) ? PLANOS.pendentes.length : 0;
+  const lix = (banco.lixeira || []).length;
+  return ens + pl + lix;
+}
+
+function chavesDoApp() {
+  const arm = (typeof MARCA === 'object' && MARCA && MARCA.armazem) || 'app';
+  const extras = [typeof CHAVE_ARMAZEM_ANTIGA !== 'undefined' ? CHAVE_ARMAZEM_ANTIGA : '', typeof CHAVE_NUVEM_ANTIGA !== 'undefined' ? CHAVE_NUVEM_ANTIGA : ''].filter(Boolean);
+  const ks = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k === ESPACO_ARMAZEM || k.startsWith(ESPACO_ARMAZEM + '.') || k.startsWith(ESPACO_ARMAZEM + '-') || k.startsWith(arm + '.') || extras.includes(k)) ks.push(k);
+  }
+  return ks;
+}
+
+async function apagarDadosDoAparelho({ sair = true } = {}) {
+  if (sair) await sairDoBanco().catch(() => {});
+  // daqui em diante nada do app volta a ser gravado neste aparelho (sincronia em curso, troca de aba…)
+  window.__apagandoAparelho = true;
+  banco.sessao = null; banco.perfil = null; banco.acesso = null;
+  try { chavesDoApp().forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { sessionStorage.removeItem('abertura-vista'); } catch (e) {}
+  if (typeof BANCO_ANEXOS !== 'undefined' && window.indexedDB) {
+    await new Promise(ok => { try { const r = indexedDB.deleteDatabase(BANCO_ANEXOS); r.onsuccess = r.onerror = r.onblocked = () => ok(); } catch (e) { ok(); } });
+  }
+}
+
+/* ------------------------------------------------------------
+   Cópia de segurança (gestor): baixar e conferir
+   ------------------------------------------------------------ */
+const TABELAS_COPIA = [
+  ['ensaios', '*'], ['aprovacoes', '*'], ['anexos', '*'], ['pontos', '*'], ['equipamentos', '*'], ['obras', '*'],
+  ['planos', '*'], ['plano_pontos', '*'], ['perfis', 'id,nome,login,papel,ativo,grupo,aceite_versao,aceite_em,criado_em'], ['auditoria', '*'],
+];
+async function sha256(texto) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+async function lerTabelaInteira(t, sel) {
+  const linhas = [];
+  for (let pag = 0; pag < 500; pag++) {
+    let r;
+    try { r = await pedidoBanco(`/rest/v1/${t}?select=${sel}&order=${t === 'auditoria' || t === 'aprovacoes' ? 'id' : t === 'perfis' ? 'criado_em' : 'id'}.asc&limit=1000&offset=${pag * 1000}`); }
+    catch (e) { if (e.status === 404) return null; throw e; }
+    linhas.push(...(r || []));
+    if (!r || r.length < 1000) break;
+  }
+  return linhas;
+}
+async function montarCopiaDeSeguranca() {
+  const tabelas = {}, contagem = {};
+  for (const [t, sel] of TABELAS_COPIA) {
+    const l = await lerTabelaInteira(t, sel);
+    if (l === null) continue;
+    tabelas[t] = l; contagem[t] = l.length;
+  }
+  const impressao = await sha256(JSON.stringify(tabelas));
+  return { app: (MARCA && MARCA.nomeApp) || '', empresa: banco.perfil.sigla, gerado_em: new Date().toISOString(),
+    gerado_por: nomePessoa(), versao_app: typeof VERSAO_APP !== 'undefined' ? VERSAO_APP : '', contagem, impressao, tabelas };
+}
+async function baixarCopiaDeSeguranca() {
+  const c = await montarCopiaDeSeguranca();
+  const texto = JSON.stringify(c);
+  const dia = c.gerado_em.slice(0, 10);
+  baixarArquivoCampo(`copia-seguranca-${String(c.empresa).toLowerCase()}-${dia}.json`, texto, 'application/json');
+  banco.ultimaCopia = c.gerado_em; gravarBanco();
+  try { await pedidoBanco('/rest/v1/rpc/registrar_evento', { metodo: 'POST', corpo: { p_acao: 'baixou cópia de segurança', p_detalhe: { contagem: c.contagem, impressao: c.impressao } } }); } catch (e) {}
+  return c;
+}
+/** Teste da cópia: o arquivo abre, a impressão digital confere e os números batem com o banco de hoje. */
+async function conferirCopia(texto) {
+  let c;
+  try { c = JSON.parse(texto); } catch (e) { return { ok: false, msg: 'O arquivo não é uma cópia de segurança do app (não abriu como JSON).' }; }
+  if (!c || !c.tabelas || !c.impressao) return { ok: false, msg: 'O arquivo não tem o formato da cópia de segurança.' };
+  const imp = await sha256(JSON.stringify(c.tabelas));
+  if (imp !== c.impressao) return { ok: false, msg: 'A impressão digital não confere: o arquivo foi alterado ou está corrompido.' };
+  const linhas = Object.entries(c.tabelas).map(([t, l]) => `${t}: ${l.length}`);
+  return { ok: true, msg: `Cópia íntegra de ${atr(c.empresa)}, gerada em ${atr(instanteTexto(c.gerado_em))} por ${atr(c.gerado_por || '—')}. ${linhas.join(' · ')}.`, copia: c };
+}
+
+/* ------------------------------------------------------------
+   Equipe e registro de alterações (gestor)
+   ------------------------------------------------------------ */
+let EQUIPE = { lista: null, aviso: '', senhaAberta: null };
+async function chamarEquipe(corpo) {
+  let r;
+  try { r = await pedidoBanco('/functions/v1/equipe', { metodo: 'POST', corpo }); }
+  catch (e) {
+    if (e.status === 404) throw new Error('A função "equipe" ainda não foi instalada no Supabase (veja o guia 11-SEGURANCA - como instalar).');
+    throw e;
+  }
+  if (!r || r.ok === false) throw new Error((r && r.erro) || 'A função "equipe" não respondeu.');
+  return r;
+}
+async function carregarEquipe() {
+  EQUIPE.lista = await pedidoBanco('/rest/v1/perfis?select=id,nome,login,papel,ativo,grupo,aceite_em,bloqueado_em&order=nome.asc');
+  return EQUIPE.lista;
+}
+function gerarSenhaProvisoria() {
+  const L = 'abcdefghjkmnpqrstuvwxyz', N = '23456789', v = new Uint32Array(10); crypto.getRandomValues(v);
+  return [...v].map((x, i) => (i % 3 === 2 ? N : L)[x % (i % 3 === 2 ? N.length : L.length)]).join('');
+}
+
+function montarSeguranca() {
+  let card = $('cardSeguranca');
+  const base = $('cardBanco');
+  const gestor = bancoLigado() && APROVA(banco.perfil.papel);
+  if (!base || !CFG_BANCO || !gestor) { if (card) card.hidden = true; return; }
+  if (!card) { card = document.createElement('div'); card.id = 'cardSeguranca'; card.className = 'card'; base.insertAdjacentElement('afterend', card); }
+  card.hidden = false;
+  const l = EQUIPE.lista;
+  const dias = banco.ultimaCopia ? Math.floor((Date.now() - Date.parse(banco.ultimaCopia)) / 86400000) : null;
+  const linha = p => `<tr><td><b>${atr(p.nome)}</b>${p.grupo ? ' <span class="tag">senha do grupo</span>' : ''}<br><small>${atr(p.login || '—')}</small></td>
+      <td>${PAPEIS_BANCO[p.papel] || p.papel}</td><td>${p.ativo ? '<span class="tag ok">ativo</span>' : '<span class="tag pendente">bloqueado</span>'}</td>
+      <td>${p.aceite_em ? atr(instanteTexto(p.aceite_em)) : '—'}</td>
+      <td class="seg-acoes">${p.id === banco.perfil.id || p.papel === 'admin' ? '' : `${p.ativo ? `<button class="btn ghost sm perigo" type="button" data-eqbloq="${p.id}">Bloquear</button>`
+        : `<button class="btn ghost sm" type="button" data-eqreat="${p.id}">Reativar</button>`}${p.grupo ? '' : ` <button class="btn ghost sm" type="button" data-eqsenha="${p.id}">Nova senha</button>`}`}
+        ${EQUIPE.senhaAberta === p.id ? `<div class="seg-senha"><input id="eqSenhaNova" value="${gerarSenhaProvisoria()}" aria-label="Senha provisória">
+          <button class="btn sm" type="button" data-eqsenhaok="${p.id}">Gravar</button></div>` : ''}</td></tr>`;
+  card.innerHTML = `<h2>Equipe e acessos <span class="tag">gestor</span></h2>
+    <p class="hint" style="margin:0 0 10px">Cada pessoa entra com o <b>próprio usuário</b>. Cadastre aqui, passe a senha provisória
+      pessoalmente: no primeiro acesso a pessoa cria a senha dela e aceita o termo. Quem sair da equipe ou perder o celular: <b>Bloquear</b>
+      (o aparelho dela apaga os dados do app ao se conectar).</p>
+    ${l ? `<div class="tabwrap"><table class="t-lista seg-tab"><thead><tr><th>Pessoa / usuário</th><th>Papel</th><th>Acesso</th><th>Aceitou o termo</th><th></th></tr></thead>
+      <tbody>${l.map(linha).join('')}</tbody></table></div>` : '<p class="hint">Carregando a equipe…</p>'}
+    <details class="seg-novo" id="eqNovoBloco"><summary class="btn ghost sm">＋ Cadastrar pessoa</summary>
+      <div class="grid4" style="margin-top:10px">
+        <div style="grid-column:span 2"><label>Nome</label><input id="eqNome" class="caixa-alta" autocomplete="off"></div>
+        <div><label>Usuário</label><input id="eqLogin" autocomplete="off" placeholder="joao.silva" autocapitalize="none"></div>
+        <div><label>Papel</label><select id="eqPapel"><option value="laboratorista">Laboratorista</option><option value="gestor">Gestor</option></select></div>
+        <div style="grid-column:span 2"><label>Senha provisória</label><input id="eqSenha" value="${gerarSenhaProvisoria()}" autocomplete="off"></div>
+        <div style="grid-column:span 2; align-self:end"><button class="btn" type="button" id="eqCriar">Cadastrar</button></div>
+      </div>
+      <p class="hint">O usuário entra no app como <b>usuário</b> + senha (sem e-mail). Ex.: joao.silva.</p></details>
+    <div id="eqAviso">${EQUIPE.aviso || ''}</div>
+    <h2 style="margin-top:18px">Registro de alterações</h2>
+    <p class="hint" style="margin:0 0 10px">Quem criou, alterou, enviou, aprovou, devolveu ou apagou cada ensaio e cadastro, com data e hora. Ninguém edita este registro.</p>
+    <div class="rasc-botoes"><button class="btn ghost" type="button" id="audVer">Ver as últimas 100</button><button class="btn ghost" type="button" id="audCsv">Baixar planilha (CSV)</button></div>
+    <div id="audLista"></div>
+    <h2 style="margin-top:18px">Cópia de segurança</h2>
+    <p class="hint" style="margin:0 0 10px">Baixa todos os dados da empresa num arquivo (ensaios, aprovações, planos, cadastros, equipe e registro de alterações),
+      com impressão digital para provar que não foi mexido. Guarde fora do celular (Drive, pen drive). As fotos ficam no armazenamento do banco.
+      ${dias === null ? '<b>Nenhuma cópia baixada neste aparelho ainda.</b>' : `Última cópia baixada aqui: <b>${atr(instanteTexto(banco.ultimaCopia))}</b>${dias > 7 ? ' — <b>faz mais de uma semana</b>' : ''}.`}</p>
+    <div class="rasc-botoes"><button class="btn" type="button" id="copiaBaixar">Baixar cópia de segurança</button>
+      <label class="btn ghost" style="margin:0">Conferir uma cópia<input type="file" id="copiaConferir" accept="application/json,.json" hidden></label></div>
+    <div id="copiaAviso"></div>`;
+  if (!l) carregarEquipe().then(() => montarSeguranca()).catch(e => { EQUIPE.aviso = `<div class="aviso erro"><span class="ico">✕</span><span>${atr(e.message)}</span></div>`; EQUIPE.lista = []; montarSeguranca(); });
+  ligarSeguranca();
+}
+
+function ligarSeguranca() {
+  const aviso = (alvo, tipo, msg) => { const e = $(alvo); if (e) e.innerHTML = `<div class="aviso ${tipo === 'erro' ? 'erro' : 'ok'}"><span class="ico">${tipo === 'erro' ? '✕' : '✓'}</span><span>${msg}</span></div>`; };
+  const acao = async (corpo, ok) => {
+    try { await chamarEquipe(corpo); await carregarEquipe(); EQUIPE.senhaAberta = null; EQUIPE.aviso = ''; montarSeguranca(); aviso('eqAviso', 'ok', ok); }
+    catch (e) { aviso('eqAviso', 'erro', atr(e.message)); }
+  };
+  document.querySelectorAll('[data-eqbloq]').forEach(b => b.onclick = () => acao({ acao: 'bloquear', id: b.dataset.eqbloq }, 'Acesso bloqueado. O aparelho da pessoa apaga os dados do app ao se conectar.'));
+  document.querySelectorAll('[data-eqreat]').forEach(b => b.onclick = () => acao({ acao: 'reativar', id: b.dataset.eqreat }, 'Acesso reativado.'));
+  document.querySelectorAll('[data-eqsenha]').forEach(b => b.onclick = () => { EQUIPE.senhaAberta = EQUIPE.senhaAberta === b.dataset.eqsenha ? null : b.dataset.eqsenha; montarSeguranca(); });
+  document.querySelectorAll('[data-eqsenhaok]').forEach(b => b.onclick = () => {
+    const s = ($('eqSenhaNova') || {}).value || '';
+    acao({ acao: 'nova_senha', id: b.dataset.eqsenhaok, senha: s }, `Senha provisória gravada: <b>${atr(s)}</b>. Passe pessoalmente; no próximo acesso a pessoa cria a dela.`);
+  });
+  const criar = $('eqCriar');
+  if (criar) criar.onclick = async () => {
+    const corpo = { acao: 'criar', nome: $('eqNome').value, login: $('eqLogin').value.trim().toLowerCase(), papel: $('eqPapel').value, senha: $('eqSenha').value };
+    criar.disabled = true;
+    try {
+      await chamarEquipe(corpo); await carregarEquipe();
+      EQUIPE.aviso = `<div class="aviso ok"><span class="ico">✓</span><span>Cadastrado: <b>${atr(corpo.nome.toUpperCase())}</b> · usuário <b>${atr(corpo.login)}</b> · senha provisória <b>${atr(corpo.senha)}</b>. Passe pessoalmente.</span></div>`;
+      montarSeguranca();
+    } catch (e) { aviso('eqAviso', 'erro', atr(e.message)); criar.disabled = false; }
+  };
+  const ver = $('audVer');
+  if (ver) ver.onclick = async () => {
+    try {
+      const r = await pedidoBanco('/rest/v1/auditoria?select=em,nome,tabela,registro,acao,detalhe&order=em.desc&limit=100');
+      $('audLista').innerHTML = r && r.length ? `<div class="tabwrap"><table class="t-lista seg-tab"><thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Ação</th></tr></thead><tbody>
+        ${r.map(x => `<tr><td>${atr(instanteTexto(x.em))}</td><td>${atr(x.nome || '')}</td><td>${atr(({ ensaios: 'Ensaio', perfis: 'Equipe', equipe: 'Equipe', planos: 'Plano', plano_pontos: 'Ponto do plano', pontos: 'PI', anexos: 'Foto', equipamentos: 'Equipamento', obras: 'Obra' })[x.tabela] || x.tabela)} ${atr(x.registro || '')}</td>
+          <td>${atr(x.acao)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Nada registrado ainda.</p>';
+    } catch (e) { aviso('audLista', 'erro', atr(e.message)); }
+  };
+  const csv = $('audCsv');
+  if (csv) csv.onclick = async () => {
+    try {
+      const r = await lerTabelaInteira('auditoria', 'em,nome,tabela,registro,acao,detalhe') || [];
+      const c = v => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+      const txt = '﻿quando;quem;tabela;registro;acao;detalhe\r\n' + r.map(x => [x.em, x.nome, x.tabela, x.registro, x.acao, JSON.stringify(x.detalhe || {})].map(c).join(';')).join('\r\n');
+      baixarArquivoCampo(`registro-alteracoes-${String(banco.perfil.sigla).toLowerCase()}.csv`, txt, 'text/csv');
+    } catch (e) { aviso('audLista', 'erro', atr(e.message)); }
+  };
+  const bx = $('copiaBaixar');
+  if (bx) bx.onclick = async () => {
+    bx.disabled = true; aviso('copiaAviso', 'ok', 'Montando a cópia…');
+    try { const c = await baixarCopiaDeSeguranca(); montarSeguranca();
+      aviso('copiaAviso', 'ok', `Cópia baixada: ${Object.entries(c.contagem).map(([t, n]) => `${t} ${n}`).join(' · ')}. Use <b>Conferir uma cópia</b> para testar o arquivo.`); }
+    catch (e) { aviso('copiaAviso', 'erro', atr(e.message)); bx.disabled = false; }
+  };
+  const cf = $('copiaConferir');
+  if (cf) cf.onchange = async () => {
+    const f = cf.files && cf.files[0]; if (!f) return;
+    const r = await conferirCopia(await f.text());
+    aviso('copiaAviso', r.ok ? 'ok' : 'erro', r.msg);
+  };
+}
+
+/* "Sair e apagar dados deste aparelho" e "Termo e privacidade" (cartão do banco, para todos) */
+let APAGAR_ABERTO = false;
+function htmlSairApagar() {
+  const n = pendentesDoAparelho();
+  return `<div class="seg-sair">
+    <button class="btn ghost sm" type="button" id="btnTermos">Termo de uso e privacidade</button>
+    <button class="btn ghost sm perigo" type="button" id="btnApagarAparelho">Sair e apagar dados deste aparelho</button>
+    ${APAGAR_ABERTO ? `<div class="aviso erro" id="apagarConf"><span class="ico">!</span><span>Apaga deste celular os ensaios, fotos, planos e o login do app.
+      O que já está no banco continua lá e volta ao entrar de novo.${n ? ` <b>Atenção: ${n} item(ns) ainda não subiram para o banco e serão perdidos.</b> Para confirmar, escreva APAGAR:
+      <input id="apagarTexto" autocomplete="off" style="max-width:140px">` : ''}
+      <span class="rasc-botoes" style="margin-top:6px"><button class="btn sm" type="button" id="apagarSim">Apagar e sair</button>
+      <button class="btn ghost sm" type="button" id="apagarNao">Cancelar</button></span></span></div>` : ''}</div>`;
+}
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('#btnTermos, #btnApagarAparelho, #apagarSim, #apagarNao, #entradaTermos');
+  if (!t) return;
+  if (t.id === 'btnTermos' || t.id === 'entradaTermos') { ev.preventDefault(); abrirTermos(); return; }
+  if (t.id === 'btnApagarAparelho') {
+    APAGAR_ABERTO = true;
+    if (bancoLigado() && navigator.onLine !== false) await sincronizarBanco({ silencioso: true }).catch(() => {});
+    montarBanco(); return;
+  }
+  if (t.id === 'apagarNao') { APAGAR_ABERTO = false; montarBanco(); return; }
+  if (t.id === 'apagarSim') {
+    if (pendentesDoAparelho() && String(($('apagarTexto') || {}).value || '').trim().toUpperCase() !== 'APAGAR') {
+      const i = $('apagarTexto'); if (i) i.focus(); return;
+    }
+    t.disabled = true;
+    await apagarDadosDoAparelho({ sair: true });
+    try { sessionStorage.setItem('aparelho-apagado', '1'); } catch (e) {}
+    location.reload();
+  }
+});
+
+/** Recado depois do recarregamento (apagou por pedido ou por bloqueio). */
+function recadoDoApagamento() {
+  let m = '';
+  try {
+    if (sessionStorage.getItem('acesso-bloqueado')) m = 'Este acesso foi bloqueado pelo gestor e os dados do app foram apagados deste aparelho.';
+    else if (sessionStorage.getItem('aparelho-apagado')) m = 'Os dados do app foram apagados deste aparelho. Para usar de novo, entre com o seu usuário.';
+    sessionStorage.removeItem('acesso-bloqueado'); sessionStorage.removeItem('aparelho-apagado');
+  } catch (e) {}
+  if (!m) return;
+  setTimeout(() => { const av = $('entradaAviso') || $('bancoAviso'); if (av) av.innerHTML = `<div class="aviso"><span class="ico">!</span><span>${m}</span></div>`; }, 80);
 }
 /* ============================================================
    ANEXOS — a foto do rascunho dentro de cada aba do ensaio
