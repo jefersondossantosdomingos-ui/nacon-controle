@@ -2337,9 +2337,34 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <section class="aba" id="aba-equipamentos" data-modos="simples caracterizacao completo csond slab marshall projcauq m031 sondagem aplicacao concreto insumos">
   <!-- Painel de controle: banco de dados, equipe e acessos, cópia de segurança (app-banco.js / app-seguranca.js) e os cadastros -->
   <div class="card" id="cardBanco" hidden>
-    <h2>Banco de dados <span class="tag" id="bancoEstado">—</span></h2>
-    <div id="bancoCorpo"></div>
-    <div id="bancoAviso" style="margin-top:8px"></div>
+    <h2>Administração <span class="tag">banco de dados, equipe e cópias</span></h2>
+    <div class="grupo-equip" data-grupo="banco">
+      <button type="button" class="cab-grupo" data-eqabre="banco">
+        <span class="seta" aria-hidden="true">›</span>
+        <span class="nome">Banco de dados</span>
+        <span class="conta"><span class="tag" id="bancoEstado">—</span></span>
+      </button>
+      <div class="corpo-grupo">
+        <div id="bancoCorpo"></div>
+        <div id="bancoAviso" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="grupo-equip" data-grupo="equipe" hidden>
+      <button type="button" class="cab-grupo" data-eqabre="equipe">
+        <span class="seta" aria-hidden="true">›</span>
+        <span class="nome">Equipe e acessos</span>
+        <span class="conta" id="conta-equipe"></span>
+      </button>
+      <div class="corpo-grupo"><div id="cardSeguranca"></div></div>
+    </div>
+    <div class="grupo-equip" data-grupo="copia" hidden>
+      <button type="button" class="cab-grupo" data-eqabre="copia">
+        <span class="seta" aria-hidden="true">›</span>
+        <span class="nome">Cópia de segurança</span>
+        <span class="conta" id="conta-copia"></span>
+      </button>
+      <div class="corpo-grupo"><div id="cardCopia"></div></div>
+    </div>
   </div>
   <div class="card" id="cardCadastros">
     <h2>Cadastros <span class="tag">projetos, calibrações e equipamentos</span></h2>
@@ -23777,6 +23802,7 @@ function avisarBanco(tipo, msg) {
   if (e) e.innerHTML = `<div class="aviso ${tipo === 'erro' ? 'erro' : tipo === 'ok' ? 'ok' : ''}"><span class="ico">${tipo === 'erro' ? '✕' : tipo === 'ok' ? '✓' : '…'}</span><span>${msg}</span></div>`;
 }
 
+let BANCO_ABRIU_SOZINHO = false;
 function montarBanco() {
   if (typeof aplicarAcessoPainel === 'function') aplicarAcessoPainel();
   const drive = $('cardNuvem');
@@ -23794,6 +23820,8 @@ function montarBanco() {
   }
   if (!corpo) return;
   if (!bancoLigado()) {
+    // sem login, o grupo "Banco de dados" abre sozinho (uma vez): é ali que se entra
+    if (!BANCO_ABRIU_SOZINHO && typeof gruposAbertos !== 'undefined') { BANCO_ABRIU_SOZINHO = true; gruposAbertos.add('banco'); aplicarGruposEquip(); }
     if (corpo.dataset.modo === 'entrar') return;      // não apaga o que a pessoa está digitando
     corpo.dataset.modo = 'entrar';
     // recolhido: o Histórico continua curto no celular
@@ -23807,6 +23835,7 @@ function montarBanco() {
   }
   // a sincronização roda a cada 15 s e chama esta função duas vezes: se o cartão já está montado para a
   // mesma pessoa, só a linha de estado e o botão mudam — nada do que está aberto ou digitado é refeito
+  BANCO_ABRIU_SOZINHO = false;
   const chave = [p.id, p.papel, nomePessoa(), ehLoginGrupo(), typeof APAGAR_ABERTO !== 'undefined' && APAGAR_ABERTO].join('|');
   if (corpo.dataset.modo === 'dentro' && corpo.dataset.chave === chave && $('bancoUltima')) {
     $('bancoUltima').textContent = textoUltimaSincronia();
@@ -24263,13 +24292,13 @@ function gerarSenhaProvisoria() {
  *  soSeFaltar: chamada da sincronização (a cada 15 s) — se os cartões já estão montados para esta pessoa,
  *  não refaz nada (refazer fechava o "Cadastrar pessoa" e apagava o que estava sendo digitado). */
 function montarSeguranca({ soSeFaltar = false } = {}) {
-  let card = $('cardSeguranca'), cardCopia = $('cardCopia');
-  const base = $('cardBanco');
-  const gestor = bancoLigado() && APROVA(banco.perfil.papel);
-  if (!base || !CFG_BANCO || !gestor) { if (card) card.hidden = true; if (cardCopia) cardCopia.hidden = true; return; }
-  if (soSeFaltar && card && cardCopia && !card.hidden && card.dataset.dono === banco.perfil.id) return;
-  if (!card) { card = document.createElement('div'); card.id = 'cardSeguranca'; card.className = 'card'; base.insertAdjacentElement('afterend', card); }
-  if (!cardCopia) { cardCopia = document.createElement('div'); cardCopia.id = 'cardCopia'; cardCopia.className = 'card'; card.insertAdjacentElement('afterend', cardCopia); }
+  const card = $('cardSeguranca'), cardCopia = $('cardCopia');
+  if (!card || !cardCopia) return;
+  const gEq = card.closest('.grupo-equip'), gCp = cardCopia.closest('.grupo-equip');
+  const gestor = CFG_BANCO && bancoLigado() && APROVA(banco.perfil.papel);
+  if (!gestor) { if (gEq) gEq.hidden = true; if (gCp) gCp.hidden = true; card.innerHTML = ''; cardCopia.innerHTML = ''; delete card.dataset.dono; return; }
+  if (gEq) gEq.hidden = false; if (gCp) gCp.hidden = false;
+  if (soSeFaltar && card.dataset.dono === banco.perfil.id && card.innerHTML) return;
   // o que a pessoa abriu ou digitou sobrevive a qualquer remontagem (menos logo depois de cadastrar)
   const guardado = {};
   if (card.dataset.dono === banco.perfil.id && !EQUIPE.limparForm) {
@@ -24280,7 +24309,6 @@ function montarSeguranca({ soSeFaltar = false } = {}) {
   }
   EQUIPE.limparForm = false;
   card.dataset.dono = banco.perfil.id;
-  card.hidden = false; cardCopia.hidden = false;
   const l = EQUIPE.lista;
   const dias = banco.ultimaCopia ? Math.floor((Date.now() - Date.parse(banco.ultimaCopia)) / 86400000) : null;
   const linha = p => `<tr><td><b>${atr(p.nome)}</b>${p.grupo ? ' <span class="tag">senha do grupo</span>' : ''}<br><small>${atr(p.login || '—')}</small></td>
@@ -24290,8 +24318,9 @@ function montarSeguranca({ soSeFaltar = false } = {}) {
         : `<button class="btn ghost sm" type="button" data-eqreat="${p.id}">Reativar</button>`}${p.grupo ? '' : ` <button class="btn ghost sm" type="button" data-eqsenha="${p.id}">Nova senha</button>`}`}
         ${EQUIPE.senhaAberta === p.id ? `<div class="seg-senha"><input id="eqSenhaNova" value="${gerarSenhaProvisoria()}" aria-label="Senha provisória">
           <button class="btn sm" type="button" data-eqsenhaok="${p.id}">Gravar</button></div>` : ''}</td></tr>`;
-  card.innerHTML = `<h2>Equipe e acessos <span class="tag">gestor</span></h2>
-    <p class="hint" style="margin:0 0 10px">Cada pessoa entra com o <b>próprio usuário</b>. Cadastre aqui, passe a senha provisória
+  const ce = $('conta-equipe'); if (ce) ce.textContent = l ? `${l.filter(p => p.ativo).length} ativo(s)` : '';
+  const cc = $('conta-copia'); if (cc) cc.textContent = dias === null ? 'nenhuma neste aparelho' : dias > 7 ? 'faz mais de 1 semana' : 'em dia';
+  card.innerHTML = `<p class="hint" style="margin:0 0 10px">Cada pessoa entra com o <b>próprio usuário</b>. Cadastre aqui, passe a senha provisória
       pessoalmente: no primeiro acesso a pessoa cria a senha dela e aceita o termo. Quem sair da equipe ou perder o celular: <b>Bloquear</b>
       (o aparelho dela apaga os dados do app ao se conectar).</p>
     ${l ? `<div class="tabwrap"><table class="t-lista seg-tab"><thead><tr><th>Pessoa / usuário</th><th>Papel</th><th>Acesso</th><th>Aceitou o termo</th><th></th></tr></thead>
@@ -24306,12 +24335,11 @@ function montarSeguranca({ soSeFaltar = false } = {}) {
       </div>
       <p class="hint">O usuário entra no app como <b>usuário</b> + senha (sem e-mail). Ex.: joao.silva.</p></details>
     <div id="eqAviso">${EQUIPE.aviso || ''}</div>
-    <h2 style="margin-top:18px">Registro de alterações</h2>
+    <h3 class="sub-card" style="margin-top:18px">Registro de alterações</h3>
     <p class="hint" style="margin:0 0 10px">Quem criou, alterou, enviou, aprovou, devolveu ou apagou cada ensaio e cadastro, com data e hora. Ninguém edita este registro.</p>
     <div class="rasc-botoes"><button class="btn ghost" type="button" id="audVer">Ver as últimas 100</button><button class="btn ghost" type="button" id="audCsv">Baixar planilha (CSV)</button></div>
     <div id="audLista"></div>`;
-  cardCopia.innerHTML = `<h2>Cópia de segurança <span class="tag">gestor</span></h2>
-    <p class="hint" style="margin:0 0 10px">Baixa todos os dados da empresa num arquivo (ensaios, aprovações, planos, cadastros, equipe e registro de alterações),
+  cardCopia.innerHTML = `    <p class="hint" style="margin:0 0 10px">Baixa todos os dados da empresa num arquivo (ensaios, aprovações, planos, cadastros, equipe e registro de alterações),
       com impressão digital para provar que não foi mexido. Guarde fora do celular (Drive, pen drive). As fotos ficam no armazenamento do banco.
       ${dias === null ? '<b>Nenhuma cópia baixada neste aparelho ainda.</b>' : `Última cópia baixada aqui: <b>${atr(instanteTexto(banco.ultimaCopia))}</b>${dias > 7 ? ' — <b>faz mais de uma semana</b>' : ''}.`}</p>
     <div class="rasc-botoes"><button class="btn" type="button" id="copiaBaixar">Baixar cópia de segurança</button>
