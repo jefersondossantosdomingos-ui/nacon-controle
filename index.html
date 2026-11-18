@@ -680,6 +680,7 @@ tr.marco td:first-child::after{content:" ●"; color:var(--accent); font-size:8p
    fichas para rolar até chegar no frasco. Cada grupo abre e fecha; fechados,
    a aba inteira cabe numa tela. */
 .grupo-equip[hidden]{display:none !important;}
+nav button[data-aba][hidden]{display:none !important;}   /* Painel de controle: só gestor/administrador */
 .grupo-equip{border:1px solid var(--border); border-radius:var(--radius-sm);
   margin-bottom:9px; background:color-mix(in srgb,var(--card) 97%, var(--bg));}
 .grupo-equip:last-of-type{margin-bottom:0;}
@@ -2164,8 +2165,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     Análise
   </button>
 <button type="button" data-aba="equipamentos" data-modos="simples caracterizacao completo csond slab marshall projcauq m031 sondagem aplicacao concreto insumos">
-    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4z"/></svg>
-    Dados gerais
+    <svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+    Painel de controle
   </button>
   </nav>
 </header>
@@ -2334,8 +2335,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <!-- ============ ABA · EQUIPAMENTOS ============ -->
 <section class="aba" id="aba-equipamentos" data-modos="simples caracterizacao completo csond slab marshall projcauq m031 sondagem aplicacao concreto insumos">
-  <div class="card">
-    <h2>Dados gerais <span class="tag">Projetos, pontos de sondagem e equipamentos</span></h2>
+  <!-- Painel de controle: banco de dados, equipe e acessos, cópia de segurança (app-banco.js / app-seguranca.js) e os cadastros -->
+  <div class="card" id="cardBanco" hidden>
+    <h2>Banco de dados <span class="tag" id="bancoEstado">—</span></h2>
+    <div id="bancoCorpo"></div>
+    <div id="bancoAviso" style="margin-top:8px"></div>
+  </div>
+  <div class="card" id="cardCadastros">
+    <h2>Cadastros <span class="tag">projetos, calibrações e equipamentos</span></h2>
     <p class="hint" style="margin:0 0 14px">
       Cadastre uma vez e escolha nos ensaios. O <b>volume do cilindro</b> é calculado do
       diâmetro e da altura; a <b>tara da cápsula</b> passa a ser puxada daqui em vez de
@@ -2613,11 +2620,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <!-- ============ ABA · HISTÓRICO ============ -->
 <section class="aba" id="aba-planos" data-modos="simples caracterizacao completo csond slab marshall projcauq m031 sondagem aplicacao concreto insumos"><div id="planoConteudo"></div></section>
 <section class="aba" id="aba-historico" data-modos="simples caracterizacao completo csond slab marshall projcauq m031 sondagem aplicacao concreto insumos">
-  <div class="card" id="cardBanco" hidden>
-    <h2>Banco de dados <span class="tag" id="bancoEstado">—</span></h2>
-    <div id="bancoCorpo"></div>
-    <div id="bancoAviso" style="margin-top:8px"></div>
-  </div>
 
   <div class="card" id="cardNuvem">
     <h2>
@@ -7144,7 +7146,7 @@ const acharPor = (lista, numero) =>
 function cilindroDe(numero) {
   const m = acharPor(estado.equip.cilindros, numero);
   if (!m) throw new Error(`Cilindro nº ${numero} não está no cadastro de equipamentos. `
-    + `Abra a aba Dados gerais e acrescente, ou escolha outro cilindro.`);
+    + `O gestor acrescenta na aba Painel de controle; ou escolha outro cilindro.`);
   const volume = ehNumero(m.volume) ? m.volume
     : (ehNumero(m.diametro) && ehNumero(m.altura) ? volumeCilindro(m.diametro, m.altura) : null);
   if (!ehNumero(volume))
@@ -7166,7 +7168,7 @@ function capsulaDe(numero, grupo = 'capsulas') {
 function frascoDe(numero) {
   const f = acharPor(estado.equip.frascos, numero);
   if (!f) throw new Error(`Frasco de areia nº ${numero} não está no cadastro de equipamentos. `
-    + `Abra a aba Dados gerais e acrescente.`);
+    + `O gestor acrescenta na aba Painel de controle.`);
   return f;
 }
 
@@ -7578,6 +7580,13 @@ function ligarImportarPis() {
     }
   });
 }
+
+/* Com plano de sondagem (marca.planosSondagem) os pontos vêm da aba Planos: o cadastro de PIs sai do Painel de controle. */
+(function () {
+  if (typeof MARCA === 'undefined' || !MARCA || !MARCA.planosSondagem) return;
+  const g = document.querySelector('[data-grupo="pis"]');
+  if (g) g.hidden = true;
+})();
 
 /* ============================================================
    CAUQ — CONCRETO ASFÁLTICO USINADO A QUENTE
@@ -9597,7 +9606,7 @@ function projetosCauq() {
 
 function opcoesProjetoCauq() {
   const lista = projetosCauq(), atual = (estado.m031.projetoOrigem || {}).chave;
-  if (!lista.length) return '<option value="">Nenhum projeto cadastrado — crie em Dados gerais → Projetos de CAUQ</option>';
+  if (!lista.length) return '<option value="">Nenhum projeto cadastrado — crie no Painel de controle → Projetos de CAUQ</option>';
   const achou = lista.some(e => (e.chaveNuvem || e.id) === atual);
   return (achou ? '' : `<option value="">${atual ? atr((estado.m031.projetoOrigem || {}).nome || 'projeto deste ensaio') + ' (cópia guardada no ensaio)' : 'Escolha o projeto…'}</option>`)
     + lista.map(e => { const k = e.chaveNuvem || e.id, r = e.resumo;
@@ -9672,7 +9681,7 @@ function salvarProjetoCauq() {
   const nome = String(estado.m031.projeto.identificacao.projeto || '').trim();
   if (!nome) {
     document.querySelectorAll('[data-pcaviso]').forEach(d => { d.innerHTML = '<div class="aviso erro"><span class="ico">✕</span><span>'
-      + 'Preencha <b>Projeto / traço</b> (aba Dados gerais): é o nome que aparece para escolher no Marshall 031/2024.</span></div>'; });
+      + 'Preencha <b>Projeto / traço</b> (aba Painel de controle): é o nome que aparece para escolher no Marshall 031/2024.</span></div>'; });
     irParaAba('pcdados');
     return false;
   }
@@ -9812,7 +9821,7 @@ function montarM031() {
     </div>
     <div class="card">
       <h2>Salvar o projeto</h2>
-      <p class="hint" style="margin:0 0 10px">O projeto fica em <b>Dados gerais → Projetos de CAUQ</b> e na lista da
+      <p class="hint" style="margin:0 0 10px">O projeto fica em <b>Painel de controle → Projetos de CAUQ</b> e na lista da
         <b>Identificação do ensaio</b> do Marshall 031/2024 — e chega aos outros aparelhos pelo banco.
         O ensaio leva uma cópia: mudar o projeto depois não mexe nos ensaios já salvos.</p>
       <div class="rasc-botoes"><button class="btn" type="button" data-pcsalvar="1">Salvar projeto</button></div>
@@ -9840,7 +9849,7 @@ function montarM031() {
       </div>
       <p class="hint" id="m31ProjInfo"></p>
       <p class="hint">A obra, o cliente, a usina, a medição e todo o projeto de mistura vêm do projeto escolhido
-        (cadastrado em <b>Dados gerais → Projetos de CAUQ</b>); aqui entra só o que identifica este ensaio.</p>
+        (cadastrado em <b>Painel de controle → Projetos de CAUQ</b>); aqui entra só o que identifica este ensaio.</p>
     </div>
     <div class="card">
       <h2>Teor de CAP <span class="tag">DNER-ME 053 · DNIT 158-ME</span></h2>
@@ -10188,7 +10197,7 @@ function desenharTelaM031(r) {
   putM31('m31ProjInfo', temProj
     ? `<span class="badge ok">✓ projeto</span> ${atr(po ? po.nome : (idp.projeto || 'projeto deste ensaio'))} · teor ${vM31(par.teorProjeto, 2)} % · `
       + `Gsb ${vM31(par.gsbProjeto, 3)} · Rice ${vM31(par.riceProjeto, 3)} · ${atr(idp.faixa || '')}`
-      + (Number.isFinite(par.teorProjeto) ? '' : ' <span class="badge fail">o projeto está sem teor de projeto — complete em Dados gerais → Projetos de CAUQ</span>')
+      + (Number.isFinite(par.teorProjeto) ? '' : ' <span class="badge fail">o projeto está sem teor de projeto — complete no Painel de controle → Projetos de CAUQ</span>')
     : '<span class="badge fail">sem projeto</span> Escolha o projeto: sem ele não há faixa de trabalho, teor de projeto nem Gsb.');
   if (estado.modo === 'm031' && typeof desenharAprovacaoNasAbas === 'function' && !document.querySelector('[data-ab-nota]')) desenharAprovacaoNasAbas();
   const svgP = $('chartProjCauq');
@@ -11304,7 +11313,7 @@ function montarCsond() {
       <div class="grid4">
         ${cab('registro', 'Registro <span class="obrig">obrigatório</span>')}
         ${cab('furo', 'Furo / PI <span class="obrig">obrigatório</span>', 'text', 'Ex.: 1')}
-        <div><label>PI cadastrado</label><select id="csPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI em Dados gerais'}</option>${
+        <div><label>PI cadastrado</label><select id="csPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI no Painel de controle'}</option>${
           listaPis().map(p => `<option value="${atr(p.numero)}"${acharPi(m.furo) === p ? ' selected' : ''}>PI ${atr(p.numero)}${ehNumero(p.km) ? ' · km ' + fmt(p.km, 3) : ''}${p.pista ? ' · ' + atr(p.pista) : ''}</option>`).join('')}</select></div>
         ${cab('dataEnsaio', 'Data do ensaio', 'date')}
         <div><label>Pista</label>${tCs('ident.pista', 'ACOST., PISTA…')}</div>
@@ -11380,7 +11389,7 @@ function montarCsond() {
   $('csProctor').innerHTML = cartaoRascunho('csproctor') + `
     <div class="card">
       <h2>Ensaio de compactação <span class="tag">DNER-ME 129 · NBR 7182</span></h2>
-      <p class="hint" style="margin:0 0 12px">Cápsulas grandes/médias e cilindros saem do cadastro (aba Dados gerais).
+      <p class="hint" style="margin:0 0 12px">Cápsulas grandes/médias e cilindros saem do cadastro (aba Painel de controle).
         Os mesmos cinco pontos alimentam o ISC.</p>
       <div class="tabwrap"><table class="t-form t-pontos">
         <thead><tr><th></th>${P.map(i => `<th>Ponto ${i + 1}</th>`).join('')}</tr></thead>
@@ -11657,7 +11666,7 @@ function desenharTelaCsond(r) {
   putCs('csPHot', pr.completo ? vCs(pr.hot, 1, '%') : '—');
   putCs('csPDmax', pr.completo ? vCs(pr.dmax, 3, 'g/cm³') : '—');
   const avisos = [];
-  if (r.faltas.length) avisos.push(`Não está no cadastro: <b>${r.faltas.join(', ')}</b>. Confira o número ou cadastre na aba Dados gerais`);
+  if (r.faltas.length) avisos.push(`Não está no cadastro: <b>${r.faltas.join(', ')}</b>. Confira o número ou peça ao gestor para cadastrar (aba Painel de controle)`);
   if (pr.completo && pr.foraDeOrdem) avisos.push('As umidades não estão em ordem crescente — a planilha pede para <b>refazer</b> o ensaio.');
   putCs('csPAviso', avisos.map(a => `<div class="aviso"><span class="ico">!</span><span>${a}</span></div>`).join(''));
   // ISC
@@ -12591,7 +12600,7 @@ async function lerRascunhoDaAba(aba, arquivos, blocos = null) {
   if (!peloBanco && (comBanco || !nuvem.url)) {
     aviso('<div class="aviso erro"><span class="ico">✕</span><span>'
       + (typeof CFG_BANCO !== 'undefined' && CFG_BANCO
-        ? 'Entre com seu e-mail e senha (Histórico → Banco de dados). É o banco que faz a leitura.'
+        ? 'Entre com seu e-mail e senha (Painel de controle → Banco de dados). É o banco que faz a leitura.'
         : 'Ligue o app à planilha do Drive (Histórico → Sincronização com o Drive). É ela que faz a leitura.')
       + '</span></div>');
     return;
@@ -13680,7 +13689,7 @@ function montarSlab() {
         ${typeof usaPlanos === 'function' && usaPlanos()
           ? `<div><label>Ponto do plano de sondagem</label><select id="slPontoSel"><option value="">${PLANOS.planos.length ? '— escolher o ST —' : 'nenhum plano (aba Planos)'}</option>${
               opcoesPontosDoPlano((s.plano || {}).pontoId)}</select></div>`
-          : `<div><label>PI cadastrado</label><select id="slPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI em Dados gerais'}</option>${
+          : `<div><label>PI cadastrado</label><select id="slPiSel"><option value="">${listaPis().length ? '— escolher PI —' : 'nenhum PI no Painel de controle'}</option>${
           listaPis().map(p => `<option value="${atr(p.numero)}"${acharPi(m.furo) === p ? ' selected' : ''}>PI ${atr(p.numero)}${ehNumero(p.km) ? ' · km ' + fmt(p.km, 3) : ''}</option>`).join('')}</select></div>`}
         ${cabSl('camada', 'Camada', 'text', 'Ex.: 0,00 a 1,50 m', false)}
         <div><label>Local</label>${tSl('ident.local', 'Ex.: KM 123+450 BR-000/UF')}</div>
@@ -13975,7 +13984,7 @@ function desenharTelaSlab(r) {
   r.gr.fino.forEach((l, i) => { putSl('slFP' + i, vSl(l.pct, 2)); putSl('slFA' + i, vSl(l.acumulada, 2));
     putSl('slFB' + i, vSl(l.passaParcial, 2)); putSl('slFF' + i, vSl(l.passa, 2)); });
   const avisos = [];
-  if (r.faltas.length) avisos.push(`Não está no cadastro: <b>${r.faltas.join(', ')}</b>. Confira o número ou cadastre em Dados gerais / Calibrações.`);
+  if (r.faltas.length) avisos.push(`Não está no cadastro: <b>${r.faltas.join(', ')}</b>. Confira o número ou peça ao gestor para cadastrar (Painel de controle / Calibrações).`);
   const av = avisos.map(a => `<div class="aviso"><span class="ico">!</span><span>${a}</span></div>`).join('');
   ['slGranAviso', 'slPicAviso', 'slLimAviso', 'slCompAviso'].forEach(id => putSl(id, av));
   // sedimentação
@@ -22258,7 +22267,7 @@ function montarAprovacao() {
         Completo, toca em <b>Enviar para aprovação</b>. O gestor confere e aprova — só então o ensaio vai para o <b>Histórico</b>.</p>
       ${a ? `<div class="aviso ok"><span class="ico">✓</span><span>Este aparelho está no modo <b>gestor</b> (${atr(a.nome)}).</span></div>
              ${a.banco ? '' : '<button class="btn ghost sm" type="button" id="btnSairAnalista">Sair do modo analista</button>'}`
-        : typeof CFG_BANCO !== 'undefined' && CFG_BANCO ? `<p class="hint">Quem aprova é definido no <b>login do banco de dados</b> (Histórico → Banco de dados): entre com o e-mail de gestor.</p>`
+        : typeof CFG_BANCO !== 'undefined' && CFG_BANCO ? `<p class="hint">Quem aprova é definido no <b>login do banco de dados</b> (Painel de controle → Banco de dados): entre com o e-mail de gestor.</p>`
         : `<details class="analista-entrar"><summary class="hint" style="cursor:pointer"><b>Sou o analista</b> — entrar para aprovar</summary>
             <div class="grid4" style="margin-top:10px"><div><label>Seu nome</label><input type="text" id="analistaNome" class="caixa-alta" autocomplete="off"></div>
             <div><label>Senha de analista</label><input type="password" id="analistaSenha" autocomplete="off"></div></div>
@@ -23288,7 +23297,7 @@ function traduzirErroBanco(m) {
 
 async function renovarSessaoBanco() {
   const s = banco.sessao;
-  if (!s) throw new Error('Entre com seu e-mail e senha (Histórico → Banco de dados).');
+  if (!s) throw new Error('Entre com seu e-mail e senha (Painel de controle → Banco de dados).');
   if (s.expires_at && s.expires_at - 60 > Date.now() / 1000) return;
   try {
     const r = await pedidoBanco('/auth/v1/token?grant_type=refresh_token', { metodo: 'POST', corpo: { refresh_token: s.refresh_token }, login: false });
@@ -23645,7 +23654,7 @@ async function baixarAnexoBanco(a) {
 }
 
 /* ------------------------------------------------------------
-   Tela (Histórico → Banco de dados)
+   Tela (Painel de controle → Banco de dados)
    ------------------------------------------------------------ */
 
 // "analista" e "gestor" são o mesmo papel: quem confere e aprova (na tela, gestor)
@@ -23768,6 +23777,7 @@ function avisarBanco(tipo, msg) {
 }
 
 function montarBanco() {
+  if (typeof aplicarAcessoPainel === 'function') aplicarAcessoPainel();
   const drive = $('cardNuvem');
   if (drive && CFG_BANCO) drive.hidden = true;
   montarTelaEntrada();
@@ -23786,7 +23796,7 @@ function montarBanco() {
     if (corpo.dataset.modo === 'entrar') return;      // não apaga o que a pessoa está digitando
     corpo.dataset.modo = 'entrar';
     // recolhido: o Histórico continua curto no celular
-    corpo.innerHTML = `<details id="bancoEntrar"><summary class="hint" style="cursor:pointer"><b>Entrar</b> com o seu e-mail e senha</summary>
+    corpo.innerHTML = `<details id="bancoEntrar"><summary class="hint" style="cursor:pointer"><b>Entrar</b> com o seu usuário e senha</summary>
       <p class="hint" style="margin:10px 0 12px">Cada pessoa entra com o <b>próprio e-mail e senha</b> (cadastrados pelo administrador).
         O papel — laboratorista ou gestor — vem do cadastro: o gestor confere e aprova os ensaios.</p>
       <div class="grid4"><div style="grid-column:span 2"><label>Usuário ou e-mail</label><input type="text" id="bancoEmail" autocomplete="username" autocapitalize="none" ${p ? `value="${atr(p.email)}"` : ''}></div>
@@ -23794,15 +23804,28 @@ function montarBanco() {
       <div style="display:flex; gap:9px; flex-wrap:wrap; margin-top:12px"><button class="btn" type="button" id="btnEntrarBanco">Entrar</button></div></details>`;
     return;
   }
-  corpo.dataset.modo = 'dentro';
+  // a sincronização roda a cada 15 s e chama esta função duas vezes: se o cartão já está montado para a
+  // mesma pessoa, só a linha de estado e o botão mudam — nada do que está aberto ou digitado é refeito
+  const chave = [p.id, p.papel, nomePessoa(), ehLoginGrupo(), typeof APAGAR_ABERTO !== 'undefined' && APAGAR_ABERTO].join('|');
+  if (corpo.dataset.modo === 'dentro' && corpo.dataset.chave === chave && $('bancoUltima')) {
+    $('bancoUltima').textContent = textoUltimaSincronia();
+    const b = $('btnSincBanco');
+    if (b) { b.disabled = !!sincronizandoBanco; b.textContent = sincronizandoBanco ? 'Sincronizando…' : 'Sincronizar agora'; }
+    if (typeof montarSeguranca === 'function') montarSeguranca({ soSeFaltar: true });
+    return;
+  }
+  corpo.dataset.modo = 'dentro'; corpo.dataset.chave = chave;
   corpo.innerHTML = `<p style="margin:0 0 6px"><b>${atr(nomePessoa())}</b> · ${PAPEIS_BANCO[p.papel] || p.papel} · ${atr(p.sigla || p.empresa)}</p>
-    <p class="hint" style="margin:0 0 12px">${ehLoginGrupo() ? 'senha do grupo' : atr(p.email)} · ${banco.ultimaSincronia ? 'última sincronização: ' + instanteTexto(banco.ultimaSincronia) : 'ainda não sincronizou neste aparelho'}.
+    <p class="hint" style="margin:0 0 12px">${ehLoginGrupo() ? 'senha do grupo' : atr(p.email)} · <span id="bancoUltima">${textoUltimaSincronia()}</span>.
       Os ensaios vão para o banco a cada <b>Salvar</b>, ao abrir o app e quando o sinal volta.</p>
     <div style="display:flex; gap:9px; flex-wrap:wrap">
       <button class="btn" type="button" id="btnSincBanco"${sincronizandoBanco ? ' disabled' : ''}>${sincronizandoBanco ? 'Sincronizando…' : 'Sincronizar agora'}</button>
       <button class="btn ghost sm perigo" type="button" id="btnSairBanco">Sair</button></div>
     ${typeof htmlSairApagar === 'function' ? htmlSairApagar() : ''}`;
-  if (typeof montarSeguranca === 'function') montarSeguranca();
+  if (typeof montarSeguranca === 'function') montarSeguranca({ soSeFaltar: true });
+}
+function textoUltimaSincronia() {
+  return banco.ultimaSincronia ? 'última sincronização: ' + instanteTexto(banco.ultimaSincronia) : 'ainda não sincronizou neste aparelho';
 }
 
 document.addEventListener('click', async ev => {
@@ -24228,13 +24251,28 @@ function gerarSenhaProvisoria() {
   return [...v].map((x, i) => (i % 3 === 2 ? N : L)[x % (i % 3 === 2 ? N.length : L.length)]).join('');
 }
 
-function montarSeguranca() {
-  let card = $('cardSeguranca');
+/** Equipe e acessos + cópia de segurança (Painel de controle, só o gestor).
+ *  soSeFaltar: chamada da sincronização (a cada 15 s) — se os cartões já estão montados para esta pessoa,
+ *  não refaz nada (refazer fechava o "Cadastrar pessoa" e apagava o que estava sendo digitado). */
+function montarSeguranca({ soSeFaltar = false } = {}) {
+  let card = $('cardSeguranca'), cardCopia = $('cardCopia');
   const base = $('cardBanco');
   const gestor = bancoLigado() && APROVA(banco.perfil.papel);
-  if (!base || !CFG_BANCO || !gestor) { if (card) card.hidden = true; return; }
+  if (!base || !CFG_BANCO || !gestor) { if (card) card.hidden = true; if (cardCopia) cardCopia.hidden = true; return; }
+  if (soSeFaltar && card && cardCopia && !card.hidden && card.dataset.dono === banco.perfil.id) return;
   if (!card) { card = document.createElement('div'); card.id = 'cardSeguranca'; card.className = 'card'; base.insertAdjacentElement('afterend', card); }
-  card.hidden = false;
+  if (!cardCopia) { cardCopia = document.createElement('div'); cardCopia.id = 'cardCopia'; cardCopia.className = 'card'; card.insertAdjacentElement('afterend', cardCopia); }
+  // o que a pessoa abriu ou digitou sobrevive a qualquer remontagem (menos logo depois de cadastrar)
+  const guardado = {};
+  if (card.dataset.dono === banco.perfil.id && !EQUIPE.limparForm) {
+    const bloco = $('eqNovoBloco'); guardado.aberto = !!(bloco && bloco.open);
+    ['eqNome', 'eqLogin', 'eqPapel', 'eqSenha', 'eqSenhaNova'].forEach(id => { const e = $(id); if (e) guardado[id] = e.value; });
+    const aud = $('audLista'); if (aud) guardado.aud = aud.innerHTML;
+    const cav = $('copiaAviso'); if (cav) guardado.copia = cav.innerHTML;
+  }
+  EQUIPE.limparForm = false;
+  card.dataset.dono = banco.perfil.id;
+  card.hidden = false; cardCopia.hidden = false;
   const l = EQUIPE.lista;
   const dias = banco.ultimaCopia ? Math.floor((Date.now() - Date.parse(banco.ultimaCopia)) / 86400000) : null;
   const linha = p => `<tr><td><b>${atr(p.nome)}</b>${p.grupo ? ' <span class="tag">senha do grupo</span>' : ''}<br><small>${atr(p.login || '—')}</small></td>
@@ -24263,14 +24301,20 @@ function montarSeguranca() {
     <h2 style="margin-top:18px">Registro de alterações</h2>
     <p class="hint" style="margin:0 0 10px">Quem criou, alterou, enviou, aprovou, devolveu ou apagou cada ensaio e cadastro, com data e hora. Ninguém edita este registro.</p>
     <div class="rasc-botoes"><button class="btn ghost" type="button" id="audVer">Ver as últimas 100</button><button class="btn ghost" type="button" id="audCsv">Baixar planilha (CSV)</button></div>
-    <div id="audLista"></div>
-    <h2 style="margin-top:18px">Cópia de segurança</h2>
+    <div id="audLista"></div>`;
+  cardCopia.innerHTML = `<h2>Cópia de segurança <span class="tag">gestor</span></h2>
     <p class="hint" style="margin:0 0 10px">Baixa todos os dados da empresa num arquivo (ensaios, aprovações, planos, cadastros, equipe e registro de alterações),
       com impressão digital para provar que não foi mexido. Guarde fora do celular (Drive, pen drive). As fotos ficam no armazenamento do banco.
       ${dias === null ? '<b>Nenhuma cópia baixada neste aparelho ainda.</b>' : `Última cópia baixada aqui: <b>${atr(instanteTexto(banco.ultimaCopia))}</b>${dias > 7 ? ' — <b>faz mais de uma semana</b>' : ''}.`}</p>
     <div class="rasc-botoes"><button class="btn" type="button" id="copiaBaixar">Baixar cópia de segurança</button>
       <label class="btn ghost" style="margin:0">Conferir uma cópia<input type="file" id="copiaConferir" accept="application/json,.json" hidden></label></div>
     <div id="copiaAviso"></div>`;
+  if (guardado.aberto !== undefined) {
+    const bloco = $('eqNovoBloco'); if (bloco) bloco.open = guardado.aberto;
+    ['eqNome', 'eqLogin', 'eqPapel', 'eqSenha', 'eqSenhaNova'].forEach(id => { const e = $(id); if (e && guardado[id] !== undefined) e.value = guardado[id]; });
+    if (guardado.aud) $('audLista').innerHTML = guardado.aud;
+    if (guardado.copia) $('copiaAviso').innerHTML = guardado.copia;
+  }
   if (!l) carregarEquipe().then(() => montarSeguranca()).catch(e => { EQUIPE.aviso = `<div class="aviso erro"><span class="ico">✕</span><span>${atr(e.message)}</span></div>`; EQUIPE.lista = []; montarSeguranca(); });
   ligarSeguranca();
 }
@@ -24294,6 +24338,7 @@ function ligarSeguranca() {
     criar.disabled = true;
     try {
       await chamarEquipe(corpo); await carregarEquipe();
+      EQUIPE.limparForm = true;
       EQUIPE.aviso = `<div class="aviso ok"><span class="ico">✓</span><span>Cadastrado: <b>${atr(corpo.nome.toUpperCase())}</b> · usuário <b>${atr(corpo.login)}</b> · senha provisória <b>${atr(corpo.senha)}</b>. Passe pessoalmente.</span></div>`;
       montarSeguranca();
     } catch (e) { aviso('eqAviso', 'erro', atr(e.message)); criar.disabled = false; }
@@ -24376,6 +24421,32 @@ function recadoDoApagamento() {
   if (!m) return;
   setTimeout(() => { const av = $('entradaAviso') || $('bancoAviso'); if (av) av.innerHTML = `<div class="aviso"><span class="ico">!</span><span>${m}</span></div>`; }, 80);
 }
+
+/* ------------------------------------------------------------
+   Painel de controle (aba "equipamentos"): só gestor, analista e administrador.
+   O laboratorista não vê a aba; o cartão do banco (sincronizar, sair, apagar
+   o aparelho, termo) vai para o alto do Histórico dele.
+   Nos testes automáticos sem login o painel fica livre (as suítes de cadastro usam a aba).
+   ------------------------------------------------------------ */
+function podeVerPainel() {
+  if (typeof CFG_BANCO === 'undefined' || !CFG_BANCO) return true;
+  if (bancoLigado()) return APROVA(banco.perfil.papel);
+  return !!(navigator.webdriver && !window.__comLogin);
+}
+function aplicarAcessoPainel() {
+  const pode = podeVerPainel();
+  document.querySelectorAll('nav button[data-aba="equipamentos"]').forEach(b => { b.hidden = !pode; });
+  const card = $('cardBanco');
+  const destino = $(pode ? 'aba-equipamentos' : 'aba-historico');
+  if (card && destino && card.parentElement !== destino) destino.insertAdjacentElement('afterbegin', card);
+  const sec = $('aba-equipamentos');
+  if (!pode && sec && sec.classList.contains('ativa')) IR_PARA_ABA_ORIGINAL('historico');
+}
+const IR_PARA_ABA_ORIGINAL = irParaAba;
+irParaAba = function (chave) {
+  if (chave === 'equipamentos' && !podeVerPainel()) chave = 'historico';
+  return IR_PARA_ABA_ORIGINAL(chave);
+};
 /* ============================================================
    ANEXOS — a foto do rascunho dentro de cada aba do ensaio
    O laboratorista anexa a ficha preenchida (ou a foto usada no "Ler rascunho"
