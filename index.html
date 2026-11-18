@@ -23836,7 +23836,7 @@ function montarBanco() {
   // a sincronização roda a cada 15 s e chama esta função duas vezes: se o cartão já está montado para a
   // mesma pessoa, só a linha de estado e o botão mudam — nada do que está aberto ou digitado é refeito
   BANCO_ABRIU_SOZINHO = false;
-  const chave = [p.id, p.papel, nomePessoa(), ehLoginGrupo(), typeof APAGAR_ABERTO !== 'undefined' && APAGAR_ABERTO].join('|');
+  const chave = [p.id, p.papel, nomePessoa(), ehLoginGrupo(), typeof APAGAR_ABERTO !== 'undefined' && APAGAR_ABERTO, typeof MINHA_SENHA_ABERTA !== 'undefined' && MINHA_SENHA_ABERTA].join('|');
   if (corpo.dataset.modo === 'dentro' && corpo.dataset.chave === chave && $('bancoUltima')) {
     $('bancoUltima').textContent = textoUltimaSincronia();
     const b = $('btnSincBanco');
@@ -24266,7 +24266,7 @@ async function conferirCopia(texto) {
 /* ------------------------------------------------------------
    Equipe e registro de alterações (gestor)
    ------------------------------------------------------------ */
-let EQUIPE = { lista: null, aviso: '', senhaAberta: null };
+let EQUIPE = { lista: null, aviso: '', senhaAberta: null, excluirAberto: null };
 async function chamarEquipe(corpo) {
   let r;
   try { r = await pedidoBanco('/functions/v1/equipe', { metodo: 'POST', corpo }); }
@@ -24280,7 +24280,7 @@ async function chamarEquipe(corpo) {
 async function carregarEquipe() {
   const l = await pedidoBanco('/rest/v1/perfis?select=id,nome,login,papel,ativo,grupo,aceite_em,bloqueado_em,bloqueado_por&order=nome.asc');
   // acessos retirados na limpeza (script 12) ficam no banco só para a rastreabilidade dos ensaios antigos: não aparecem na lista
-  EQUIPE.lista = (l || []).filter(p => !(p.ativo === false && p.bloqueado_por === 'limpeza de acessos'));
+  EQUIPE.lista = (l || []).filter(p => !(p.ativo === false && ['limpeza de acessos', 'excluído da equipe'].includes(p.bloqueado_por)));
   return EQUIPE.lista;
 }
 function gerarSenhaProvisoria() {
@@ -24315,7 +24315,12 @@ function montarSeguranca({ soSeFaltar = false } = {}) {
       <td>${PAPEIS_BANCO[p.papel] || p.papel}</td><td>${p.ativo ? '<span class="tag ok">ativo</span>' : '<span class="tag pendente">bloqueado</span>'}</td>
       <td>${p.aceite_em ? atr(instanteTexto(p.aceite_em)) : '—'}</td>
       <td class="seg-acoes">${p.id === banco.perfil.id || p.papel === 'admin' ? '' : `${p.ativo ? `<button class="btn ghost sm perigo" type="button" data-eqbloq="${p.id}">Bloquear</button>`
-        : `<button class="btn ghost sm" type="button" data-eqreat="${p.id}">Reativar</button>`}${p.grupo ? '' : ` <button class="btn ghost sm" type="button" data-eqsenha="${p.id}">Nova senha</button>`}`}
+        : `<button class="btn ghost sm" type="button" data-eqreat="${p.id}">Reativar</button>`}${p.grupo ? '' : ` <button class="btn ghost sm" type="button" data-eqsenha="${p.id}">Nova senha</button>`}
+        <button class="btn ghost sm perigo" type="button" data-eqexcl="${p.id}">Excluir</button>`}
+        ${EQUIPE.excluirAberto === p.id ? `<div class="aviso erro seg-excluir"><span class="ico">!</span><span>Excluir <b>${atr(p.nome)}</b> da equipe? O acesso deixa de existir:
+          a pessoa não entra mais, some desta lista e o celular dela apaga os dados do app ao se conectar. Os ensaios que ela já fez continuam, com o nome dela.
+          <span class="rasc-botoes" style="margin-top:6px"><button class="btn sm" type="button" data-eqexclok="${p.id}">Excluir acesso</button>
+          <button class="btn ghost sm" type="button" data-eqexclnao="1">Cancelar</button></span></span></div>` : ''}
         ${EQUIPE.senhaAberta === p.id ? `<div class="seg-senha"><input id="eqSenhaNova" value="${gerarSenhaProvisoria()}" aria-label="Senha provisória">
           <button class="btn sm" type="button" data-eqsenhaok="${p.id}">Gravar</button></div>` : ''}</td></tr>`;
   const ce = $('conta-equipe'); if (ce) ce.textContent = l ? `${l.filter(p => p.ativo).length} ativo(s)` : '';
@@ -24364,6 +24369,10 @@ function ligarSeguranca() {
   document.querySelectorAll('[data-eqbloq]').forEach(b => b.onclick = () => acao({ acao: 'bloquear', id: b.dataset.eqbloq }, 'Acesso bloqueado. O aparelho da pessoa apaga os dados do app ao se conectar.'));
   document.querySelectorAll('[data-eqreat]').forEach(b => b.onclick = () => acao({ acao: 'reativar', id: b.dataset.eqreat }, 'Acesso reativado.'));
   document.querySelectorAll('[data-eqsenha]').forEach(b => b.onclick = () => { EQUIPE.senhaAberta = EQUIPE.senhaAberta === b.dataset.eqsenha ? null : b.dataset.eqsenha; montarSeguranca(); });
+  document.querySelectorAll('[data-eqexcl]').forEach(b => b.onclick = () => { EQUIPE.excluirAberto = EQUIPE.excluirAberto === b.dataset.eqexcl ? null : b.dataset.eqexcl; montarSeguranca(); });
+  document.querySelectorAll('[data-eqexclnao]').forEach(b => b.onclick = () => { EQUIPE.excluirAberto = null; montarSeguranca(); });
+  document.querySelectorAll('[data-eqexclok]').forEach(b => b.onclick = () => { b.disabled = true; EQUIPE.excluirAberto = null;
+    acao({ acao: 'excluir', id: b.dataset.eqexclok }, 'Acesso excluído. A pessoa saiu da equipe; o aparelho dela apaga os dados do app ao se conectar.'); });
   document.querySelectorAll('[data-eqsenhaok]').forEach(b => b.onclick = () => {
     const s = ($('eqSenhaNova') || {}).value || '';
     acao({ acao: 'nova_senha', id: b.dataset.eqsenhaok, senha: s }, `Senha provisória gravada: <b>${atr(s)}</b>. Passe pessoalmente; no próximo acesso a pessoa cria a dela.`);
@@ -24413,21 +24422,36 @@ function ligarSeguranca() {
 }
 
 /* "Sair e apagar dados deste aparelho" e "Termo e privacidade" (cartão do banco, para todos) */
-let APAGAR_ABERTO = false;
+let APAGAR_ABERTO = false, MINHA_SENHA_ABERTA = false;
 function htmlSairApagar() {
   const n = pendentesDoAparelho();
   return `<div class="seg-sair">
+    <button class="btn ghost sm" type="button" id="btnMinhaSenha">Trocar minha senha</button>
     <button class="btn ghost sm" type="button" id="btnTermos">Termo de uso e privacidade</button>
     <button class="btn ghost sm perigo" type="button" id="btnApagarAparelho">Sair e apagar dados deste aparelho</button>
     ${APAGAR_ABERTO ? `<div class="aviso erro" id="apagarConf"><span class="ico">!</span><span>Apaga deste celular os ensaios, fotos, planos e o login do app.
       O que já está no banco continua lá e volta ao entrar de novo.${n ? ` <b>Atenção: ${n} item(ns) ainda não subiram para o banco e serão perdidos.</b> Para confirmar, escreva APAGAR:
       <input id="apagarTexto" autocomplete="off" style="max-width:140px">` : ''}
       <span class="rasc-botoes" style="margin-top:6px"><button class="btn sm" type="button" id="apagarSim">Apagar e sair</button>
-      <button class="btn ghost sm" type="button" id="apagarNao">Cancelar</button></span></span></div>` : ''}</div>`;
+      <button class="btn ghost sm" type="button" id="apagarNao">Cancelar</button></span></span></div>` : ''}
+    ${MINHA_SENHA_ABERTA ? `<form class="seg-minha" id="formMinhaSenha" autocomplete="off">
+      <p class="hint" style="margin:0 0 8px">Só quem está logado troca a própria senha — ninguém troca a senha de outra pessoa por aqui.</p>
+      <div class="grid4"><div style="grid-column:span 2"><label for="minhaAtual">Senha atual</label><input type="password" id="minhaAtual" autocomplete="current-password"></div>
+        <div style="grid-column:span 2"></div>
+        <div style="grid-column:span 2"><label for="minhaNova1">Senha nova</label><input type="password" id="minhaNova1" autocomplete="new-password"></div>
+        <div style="grid-column:span 2"><label for="minhaNova2">Repita a senha nova</label><input type="password" id="minhaNova2" autocomplete="new-password"></div></div>
+      <span class="rasc-botoes" style="margin-top:8px"><button class="btn sm" type="submit" id="minhaSalvar">Gravar senha nova</button>
+        <button class="btn ghost sm" type="button" id="minhaCancelar">Cancelar</button></span>
+      <div id="minhaAviso"></div></form>` : ''}</div>`;
 }
 document.addEventListener('click', async ev => {
-  const t = ev.target.closest('#btnTermos, #btnApagarAparelho, #apagarSim, #apagarNao, #entradaTermos');
+  const t = ev.target.closest('#btnTermos, #btnApagarAparelho, #apagarSim, #apagarNao, #entradaTermos, #btnMinhaSenha, #minhaCancelar');
   if (!t) return;
+  if (t.id === 'btnMinhaSenha' || t.id === 'minhaCancelar') {
+    MINHA_SENHA_ABERTA = t.id === 'btnMinhaSenha' ? !MINHA_SENHA_ABERTA : false; montarBanco();
+    if (MINHA_SENHA_ABERTA) setTimeout(() => { const i = $('minhaAtual'); if (i) i.focus(); }, 30);
+    return;
+  }
   if (t.id === 'btnTermos' || t.id === 'entradaTermos') { ev.preventDefault(); abrirTermos(); return; }
   if (t.id === 'btnApagarAparelho') {
     APAGAR_ABERTO = true;
@@ -24483,6 +24507,31 @@ irParaAba = function (chave) {
   if (chave === 'equipamentos' && !podeVerPainel()) chave = 'historico';
   return IR_PARA_ABA_ORIGINAL(chave);
 };
+
+
+/* "Trocar minha senha": a pessoa logada troca a PRÓPRIA senha (confere a atual antes).
+   Ninguém troca a senha de outro por aqui; o acesso protegido (script 14) também não é mexido pela equipe. */
+document.addEventListener('submit', async ev => {
+  if (!ev.target || ev.target.id !== 'formMinhaSenha') return;
+  ev.preventDefault();
+  const av = $('minhaAviso'), b = $('minhaSalvar');
+  const aviso = (tipo, m) => { av.innerHTML = `<div class="aviso ${tipo === 'ok' ? 'ok' : 'erro'}"><span class="ico">${tipo === 'ok' ? '✓' : '✕'}</span><span>${m}</span></div>`; };
+  const atual = $('minhaAtual').value, s1 = $('minhaNova1').value, s2 = $('minhaNova2').value;
+  if (!atual) return aviso('erro', 'Digite a senha atual.');
+  if (!senhaForte(s1)) return aviso('erro', 'A senha nova precisa de no mínimo 8 caracteres, com letras e números.');
+  if (s1 !== s2) return aviso('erro', 'As duas senhas novas não são iguais.');
+  if (s1 === atual) return aviso('erro', 'A senha nova é igual à atual.');
+  b.disabled = true; b.textContent = 'Gravando…';
+  try {
+    // confere a senha atual (quem pegou o celular desbloqueado não troca a senha de ninguém)
+    try { await pedidoBanco('/auth/v1/token?grant_type=password', { metodo: 'POST', corpo: { email: banco.perfil.email, password: atual }, login: false }); }
+    catch (e) { throw new Error(e.status === 400 ? 'A senha atual não confere.' : e.message); }
+    await pedidoBanco('/auth/v1/user', { metodo: 'PUT', corpo: { password: s1 } });
+    pedidoBanco('/rest/v1/rpc/registrar_evento', { metodo: 'POST', corpo: { p_acao: 'trocou a própria senha', p_detalhe: {} } }).catch(() => {});
+    MINHA_SENHA_ABERTA = false; montarBanco();
+    avisarBanco('ok', 'Senha trocada. Use a senha nova da próxima vez que entrar.');
+  } catch (e) { aviso('erro', atr(e.message)); b.disabled = false; b.textContent = 'Gravar senha nova'; }
+});
 /* ============================================================
    ANEXOS — a foto do rascunho dentro de cada aba do ensaio
    O laboratorista anexa a ficha preenchida (ou a foto usada no "Ler rascunho"
