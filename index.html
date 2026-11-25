@@ -787,6 +787,12 @@ details.card > summary::-webkit-details-marker{display:none;}
 .pl-etapa.feita > .pl-etapa-cab .n{background:var(--mk-conforme-500); border-color:var(--mk-conforme-500); color:var(--mk-branco);}
 .pl-etapa > .pl-etapa-cab b{font-size:14px;} .pl-etapa > .pl-etapa-cab .res{margin-left:auto; font-size:12px; color:var(--text-2); text-align:right;}
 .pl-etapa > .pl-etapa-cab .res .pl-reg{font-size:13px; color:var(--text);}
+details.pl-etapa > summary.pl-etapa-cab{cursor:pointer; list-style:none; margin-bottom:0;}
+details.pl-etapa > summary.pl-etapa-cab::-webkit-details-marker{display:none;}
+details.pl-etapa > summary.pl-etapa-cab::after{content:'▸'; color:var(--text-2); font-size:13px;}
+details.pl-etapa[open] > summary.pl-etapa-cab{margin-bottom:8px;} details.pl-etapa[open] > summary.pl-etapa-cab::after{content:'▾';}
+.pl-fotos-bloco{border-top:1px solid var(--border); padding:10px 0 4px; margin-top:4px;}
+.pl-sub{display:flex; align-items:baseline; gap:8px; font-size:13px; margin:0 0 8px;} .pl-sub .hint{margin-left:auto; font-size:12px; font-weight:400;}
 .pl-passos{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;}
 .pl-passo{display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 4px; border-radius:var(--radius-sm); cursor:pointer;
   border:1px dashed var(--border); background:transparent; color:var(--text-2); font:inherit; min-height:58px;}
@@ -25764,7 +25770,10 @@ function detalheDoPonto(p, pl, gestor) {
     <p class="hint pl-det-meta">km ${kmTexto(p.km)} · prof. ${fmt(p.prof, 2)} m · ${atr(trechoCurto(p.trecho))}
       ${geo ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${geo.lat.toFixed(6)},${geo.lon.toFixed(6)}" target="_blank" rel="noopener">abrir no mapa</a>` : ''}</p>
     <div class="pl-pedidos">${pedidos.map(t => `<span class="pl-chip ${corChip(s[t.k])}">${t.curto}</span>`).join('')}</div>
-    ${etapa(1, 'Campo', !!so.data, so.data ? `sondado ${dataBrSl(so.data)}${ehNumero(so.prof) ? ' · ' + fmt(so.prof, 2) + ' m' : ''}` : 'a sondar', htmlCampoDoPonto(p, pl))}
+    ${(() => {   // Campo: um bloco só, que recolhe inteiro (aberto enquanto o furo está em andamento ou quando veio pelo QR code)
+      const res = so.data ? `sondado ${dataBrSl(so.data)}${ehNumero(so.prof) ? ' · ' + fmt(so.prof, 2) + ' m' : ''}` : so.inicio ? `em andamento desde ${horaBr(so.inicio.em)}` : 'a sondar';
+      return `<details class="pl-etapa${so.data ? ' feita' : ''}" data-plcampo="${p.id}"${abertoCampo(p).campo ? ' open' : ''}>
+        <summary class="pl-etapa-cab"><span class="n">${so.data ? '✓' : 1}</span><b>Campo</b><span class="res">${res}</span></summary>${htmlCampoDoPonto(p, pl)}</details>`; })()}
     ${etapa(2, 'Amostra', !!p.registro, p.registro ? `<b class="pl-reg">${p.registro}</b>` : 'sem registro',
       p.registro ? `<p class="hint" style="margin:0">Registrada${p.registrado_em ? ' em ' + dataBrSl(String(p.registrado_em).slice(0, 10)) : ''}${p.registrado_por ? ' por ' + atr(p.registrado_por) : ''}.</p>`
         : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (${atr(registroDoPonto(p, pl))})</button></div>`)}
@@ -25974,6 +25983,8 @@ const COR_ETAPA = { asondar: '#9AA0A6', sondado: '#2B7BD8', registrado: '#7B5CD6
 const sondagemDe = p => p.sondagem || {};
 // a data do furo é a do relógio local (à noite, a data em UTC já é a do dia seguinte)
 const dataLocal = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** 35 m · 1,2 km · 916 km */
+const distTexto = m => !ehNumero(m) ? '' : m < 1000 ? `${Math.round(m)} m` : `${String(+(m / 1000).toFixed(m < 10000 ? 1 : 0)).replace('.', ',')} km`;
 const horaBr = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
 const dataHoraBr = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
 const descCamada = c => [c.material, c.cor ? c.cor.toLowerCase() : '', c.umidade ? c.umidade.toLowerCase() : '', c.compl].filter(Boolean).join(', ');
@@ -26048,7 +26059,7 @@ async function adicionarFotoCampo(p, arq, etapa) {
   const linhas = [
     `${p.st} · Plano ${pl.codigo || ''} · ${rot}`,
     `${dataHoraBr(m.em)}${pos ? ` · ${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)} (±${Math.round(pos.prec || 0)} m)` : ' · sem GPS'}`,
-    `${ehNumero(m.dist) ? `a ${m.dist} m da coordenada do plano · ` : ''}km ${kmTexto(p.km)} · ${(so.equipe || quemSou())}`,
+    `${ehNumero(m.dist) ? `a ${distTexto(m.dist)} da coordenada do plano · ` : ''}km ${kmTexto(p.km)} · ${(so.equipe || quemSou())}`,
   ];
   const f = await fotoCarimbada(arq, linhas);
   const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -26107,26 +26118,25 @@ function htmlCampoDoPonto(p, pl) {
   // 25/11: o furo começa sozinho ao ler o QR code da etiqueta (#furo=); aqui o operador só FINALIZA.
   // Data, profundidade, NA, camadas, relevo… vão na aba Boletim (um lugar só, sem repetir).
   const marca = (x, rot) => `<div class="pl-passo${x ? ' feito' : ''}"><span class="ic">${x ? '✓' : '·'}</span><span class="rot">${rot}</span>
-      <span class="hr">${x ? horaBr(x.em) + (ehNumero(x.dist) ? ` · ${x.dist} m` : '') : rot === 'Início do furo' ? 'ao ler o QR code da etiqueta' : 'a finalizar'}</span></div>`;
+      <span class="hr">${x ? horaBr(x.em) + (ehNumero(x.dist) ? ` · ${distTexto(x.dist)}` : '') : rot === 'Início do furo' ? 'ao ler o QR code da etiqueta' : 'a finalizar'}</span></div>`;
   const fotos = (so.fotos || []).map((f, i) => `<div class="pl-foto-item">
       <button type="button" class="pl-foto" data-plfoto="${i}" title="${atr(dataHoraBr(f.em))}">
-      <img alt="" data-plfotoimg="${atr(f.id)}"><span>${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]} · ${horaBr(f.em)}${ehNumero(f.dist) ? ` · ${f.dist} m` : ''}${f.caminho ? '' : ' · 📱'}</span></button>
+      <img alt="" data-plfotoimg="${atr(f.id)}"><span>${(ETAPAS_FOTO.find(e => e[0] === f.etapa) || ['', 'Foto'])[1]} · ${horaBr(f.em)}${ehNumero(f.dist) ? ` · ${distTexto(f.dist)}` : ''}${f.caminho ? '' : ' · 📱'}</span></button>
       ${FOTO_A_APAGAR === f.id
         ? `<div class="pl-foto-conf"><b>Apagar esta foto?</b><div><button class="btn sm" type="button" data-plfotosim="${atr(f.id)}">Apagar</button>
             <button class="btn sm ghost" type="button" data-plfotonao="1">Não</button></div></div>`
         : `<button type="button" class="pl-foto-x" data-plfototira="${atr(f.id)}" title="Apagar foto" aria-label="Apagar foto">✕</button>`}</div>`).join('');
   const alerta = ['chegada', 'inicio', 'fim'].map(k => so[k]).filter(x => x && ehNumero(x.dist) && x.dist > LIMITE_DIST_CAMPO);
-  const ab = abertoCampo(p), nFotos = (so.fotos || []).length;
+  const nFotos = (so.fotos || []).length;
   return `
     <div class="pl-passos">${marca(so.inicio, 'Início do furo')}${marca(so.fim, 'Fim do furo')}</div>
-    ${alerta.length ? `<div class="aviso erro"><span class="ico">!</span><span>Marcado a mais de ${LIMITE_DIST_CAMPO} m da coordenada do plano (${alerta.map(x => x.dist + ' m').join(', ')}). Confira se é o ponto certo.</span></div>` : ''}
+    ${alerta.length ? `<div class="aviso erro"><span class="ico">!</span><span>Marcado a mais de ${LIMITE_DIST_CAMPO} m da coordenada do plano (${alerta.map(x => distTexto(x.dist)).join(', ')}). Confira se é o ponto certo.</span></div>` : ''}
     <div id="plsAviso"></div>
-    <details class="pl-bloco" data-plbloco="fotos"${ab.fotos ? ' open' : ''}>
-      <summary><b>Fotos do campo</b><span class="hint">${nFotos ? `${nFotos} foto(s)` : 'nenhuma ainda'}</span></summary><div class="pl-bloco-corpo">
+    <div class="pl-fotos-bloco"><h4 class="pl-sub">Fotos do campo <span class="hint">${nFotos ? `${nFotos} foto(s)` : 'nenhuma ainda'}</span></h4>
       <div class="rasc-botoes"><select id="plsFotoEtapa" style="max-width:190px">${ETAPAS_FOTO.map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
         <label class="btn sm ghost"><input type="file" accept="image/*" capture="environment" id="plsFoto" hidden>📷 Tirar foto</label></div>
       <p class="hint" style="margin:6px 0 0">Data, hora e GPS ficam gravados na própria foto.</p>
-      <div class="pl-fotos">${fotos}</div></div></details>
+      <div class="pl-fotos">${fotos}</div></div>
     <div class="rasc-botoes pl-acoes">
       ${so.fim ? '' : '<button class="btn sm" type="button" id="plsFinalizar">■ Finalizar furo</button>'}
       <button class="btn ${so.fim ? 'sm' : 'ghost sm'}" type="button" id="plsAbrirBol">Preencher o boletim</button>
@@ -26146,7 +26156,7 @@ async function marcarFuro(p, k) {
 }
 function textoMarcaFuro(k, m, pos) {
   return `${{ inicio: 'Furo iniciado', fim: 'Furo finalizado' }[k]} às <b>${horaBr(m.em)}</b>` +
-    (pos ? (ehNumero(m.dist) ? ` — a <b>${m.dist} m</b> da coordenada do plano${m.dist > LIMITE_DIST_CAMPO ? '. Confira se é o ponto certo' : ''}.` : '.') : ' — sem GPS (ligue a localização do aparelho).');
+    (pos ? (ehNumero(m.dist) ? ` — a <b>${distTexto(m.dist)}</b> da coordenada do plano${m.dist > LIMITE_DIST_CAMPO ? '. Confira se é o ponto certo' : ''}.` : '.') : ' — sem GPS (ligue a localização do aparelho).');
 }
 
 /** Relevo e vegetação costumam repetir de um furo para o outro: sugere o último usado no plano. */
@@ -26156,16 +26166,16 @@ function ultimoDoPlano(p, k) {
 }
 
 /* Quais blocos do ponto estão abertos — resiste à tela ser remontada (sincronização a cada 15 s).
-   As fotos começam abertas enquanto o furo está em andamento. */
+   O bloco Campo começa aberto enquanto o furo não foi finalizado (e sempre que se entra pelo QR code). */
 const ABERTO_CAMPO = {};
 function abertoCampo(p) {
-  if (!ABERTO_CAMPO[p.id]) { const so = sondagemDe(p); ABERTO_CAMPO[p.id] = { fotos: !!so.inicio && !so.fim }; }
+  if (!ABERTO_CAMPO[p.id]) { const so = sondagemDe(p); ABERTO_CAMPO[p.id] = { campo: !so.fim }; }
   return ABERTO_CAMPO[p.id];
 }
 
 function ligarCampoDoPonto(p, pl) {
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
-  document.querySelectorAll('[data-plbloco]').forEach(d => d.addEventListener('toggle', () => { abertoCampo(p)[d.dataset.plbloco] = d.open; }));
+  document.querySelectorAll('[data-plcampo]').forEach(d => d.addEventListener('toggle', () => { abertoCampo(p).campo = d.open; }));
   on('plsFinalizar', 'click', async ev => {
     ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
     const { m, pos } = await marcarFuro(p, 'fim');
@@ -26242,7 +26252,7 @@ function ligarMapaPlano(pl) {
     // onde a equipe estava ao terminar o furo (se longe da coordenada, aparece a linha)
     const so = sondagemDe(p), fim = so.fim || (ehNumero(so.lat) ? { lat: so.lat, lon: so.lon, dist: so.distancia } : null);
     if (fim && ehNumero(fim.lat) && ehNumero(fim.dist) && fim.dist > LIMITE_DIST_CAMPO)
-      L.polyline([[g.lat, g.lon], [fim.lat, fim.lon]], { color: '#D93025', weight: 2, dashArray: '4 4' }).bindTooltip(`${p.st}: furo a ${fim.dist} m da coordenada`).addTo(grupo);
+      L.polyline([[g.lat, g.lon], [fim.lat, fim.lon]], { color: '#D93025', weight: 2, dashArray: '4 4' }).bindTooltip(`${p.st}: furo a ${distTexto(fim.dist)} da coordenada`).addTo(grupo);
   });
   if (MAPA_EU) L.circleMarker([MAPA_EU.lat, MAPA_EU.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#1A73E8', fillOpacity: 1 }).bindTooltip('Você').addTo(mapa);
   // a tela do plano é remontada com frequência (filtro, sincronização): sem animação no encaixe e
@@ -26511,7 +26521,7 @@ function htmlFolhaBoletim(d, folhaTxt = 'Única') {
   const prof = ehNumero(b.prof) ? b.prof : (camadas.length ? camadas[camadas.length - 1].ate : (p ? p.prof : null));
   const terreno = b.terreno || (b.naSeco ? 'seco' : '');
   const outras = b.outras || [p && ehNumero(p.km) ? `km ${kmTexto(p.km)}` : '', d.registro ? `amostra ${d.registro}` : '',
-    so.fim ? `furo concluído às ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` (GPS a ${so.fim.dist} m do ponto)` : ''}` : ''].filter(Boolean).join(' · ');
+    so.fim ? `furo concluído às ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` (GPS a ${distTexto(so.fim.dist)} do ponto)` : ''}` : ''].filter(Boolean).join(' · ');
   return `<div class="folha nbol" data-cheia="1">
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td>
         <td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
@@ -26770,7 +26780,7 @@ async function htmlBoletins(pl, pontos) {
     if (fotos.length) folhas.push(`<div class="folha nbol fotos-folha">
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(p.st)} · ${atr(d.cliente || '')}</div>
-      <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${f.dist} m do ponto` : ''}</figcaption></figure>`).join('')}</div>
+      <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${distTexto(f.dist)} do ponto` : ''}</figcaption></figure>`).join('')}</div>
       <table class="coord"><tr><td class="r fl">Folha:<br><span>2/2</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
     </div>`);
   }
@@ -26861,7 +26871,7 @@ function htmlAbaBoletimSlab() {
   return `${typeof cartaoRascunho === 'function' ? cartaoRascunho('slbol') : ''}
     ${doCampo ? `<div class="card destaque-card"><h2>Do campo <span class="tag">${atr(p.st)}</span></h2>
       <p class="hint" style="margin:0 0 8px">${[so.data && 'sondado em ' + dataBrSl(so.data), so.equipe, ehNumero(so.prof) && fmt(so.prof, 2) + ' m',
-        (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${so.fim.dist} m do ponto` : ''}`,
+        (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${distTexto(so.fim.dist)} do ponto` : ''}`,
         (so.fotos || []).length && so.fotos.length + ' foto(s)'].filter(Boolean).join(' · ')}</p>
       <button class="btn ghost sm" type="button" id="bolPuxar">Puxar de novo o que o campo marcou</button></div>` : ''}
     <div class="card">
@@ -27158,6 +27168,7 @@ async function abrirFuroDoQr() {
   try {
     try { sessionStorage.removeItem(CHAVE_FURO_QR); } catch (e) {}
     PLANOS.aberto = p.plano_id; FILTRO_PLANO.aberto = p.id; gravarPlanos();
+    abertoCampo(p).campo = true;                          // pelo QR code: tudo do campo aberto
     irParaAba('planos');
     const d = document.querySelector('.pl-detalhe'); if (d) d.scrollIntoView({ block: 'start' });
     if (sondagemDe(p).inicio) { avisoPlano('plPontoAviso', '', `${atr(p.st)}: furo já iniciado às <b>${horaBr(sondagemDe(p).inicio.em)}</b>.`); return true; }
