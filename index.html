@@ -288,6 +288,7 @@ header .chips > *{flex:0 0 auto;}
 }
 .tag.pendente{background:var(--warn-l); color:var(--warn); border-color:transparent;}
 .escondido-fam{display:none !important;}
+.fora-do-plano{display:none !important;}
 /* A aba Histórico é uma página de consulta: a barra de lançamento sai de cena
    e a lista aproveita a altura toda. Volta-se por Dados ou Ensaio, no topo. */
 body.sem-rodape .nav-baixo{display:none;}
@@ -12396,6 +12397,10 @@ function resolverFicha(f) {
 const fichaDaAba = aba => resolverFicha(todasFichas().find(f => f.aba === aba));
 const cabDaFicha = f => f.cabs || CAB_CS;
 const fichasDoModo = (modo = estado.modo) => todasFichas().filter(f => f.modo === modo).map(f => f.aba);
+/** As fichas das abas à vista (ensaio de plano: só as dos ensaios pedidos). */
+const fichasVisiveis = () => { const abas = estado.modo === 'slab' && typeof abasSlabDoPlano === 'function' ? abasSlabDoPlano() : null;
+  const ordem = [...document.querySelectorAll('.nav-baixo [data-aba]')].map(b => b.dataset.aba);   // na ordem das abas
+  return fichasDoModo().filter(a => !abas || abas.has(a)).sort((x, y) => ordem.indexOf(x) - ordem.indexOf(y)); };
 
 /** Só alguns blocos da ficha — a leitura de um cartão da tela. */
 function recorteFicha(f, idxs) {
@@ -12941,7 +12946,7 @@ function ligarRascunho() {
   document.querySelectorAll('[data-rascfichas]').forEach(el => {
     if (el.dataset.ligado) return;
     el.dataset.ligado = '1';
-    el.addEventListener('click', () => abrirFichasRascunho());
+    el.addEventListener('click', () => abrirFichasRascunho(fichasVisiveis()));
   });
   const todas = $('btnFichasRascunho');
   if (todas && !todas.dataset.ligado) { todas.dataset.ligado = '1'; todas.addEventListener('click', () => abrirFichasRascunho()); }
@@ -13581,7 +13586,7 @@ function ligarSlab() {
   const g = $('btnGuardarCfgSl');
   if (g && !g.dataset.ligado) { g.dataset.ligado = '1'; g.addEventListener('click', guardarCfgSlab); }
   const fr = $('btnFichasSlab');
-  if (fr && !fr.dataset.ligado) { fr.dataset.ligado = '1'; fr.addEventListener('click', () => abrirFichasRascunho(FICHAS_SLAB.map(f => f.aba))); }
+  if (fr && !fr.dataset.ligado) { fr.dataset.ligado = '1'; fr.addEventListener('click', () => abrirFichasRascunho(fichasVisiveis())); }
   if (typeof ligarRascunho === 'function') ligarRascunho();
 }
 
@@ -13729,6 +13734,7 @@ function atualizarSlab() {
   if (typeof alinharCabecalhoComPlano === 'function' && alinharCabecalhoComPlano()) montarSlab();
   const r = calcularSlabTela();
   desenharTelaSlab(r);
+  if (estado.modo === 'slab') aplicarAbasDoPlanoSl(r);
   if (typeof avisoFaltaBol === 'function') avisoFaltaBol();
   return r;
 }
@@ -14066,10 +14072,45 @@ function montarSlab() {
       <div id="slCfgAviso"></div>`;
 
   ligarSlab();
+  aplicarAbasDoPlanoSl();
   const ob = document.querySelector('[data-slobra]');
   // só o toque da pessoa conta (o "aberto" automático de quando falta dado não fica lembrado)
   if (ob) ob.querySelector('summary').addEventListener('click', () => { SL_OBRA_ABERTA = !ob.open; });
   if (typeof ligarAbaBoletimSlab === 'function') ligarAbaBoletimSlab();
+}
+
+/* ---------- ABAS DO PLANO ----------
+   Ensaio ligado a um ponto do plano: só aparecem as abas dos ensaios que o plano pede para aquele ponto
+   (furo SPT que pede só granulometria não mostra limites, compactação nem ISC). Aba que já tem dado
+   lançado continua à vista. Sem plano: todas. */
+const ABAS_DO_TIPO_SL = { insitu: ['slinsitu'], granul: ['slgranul'], sed: ['slsed'], isc: ['sllim', 'slcomp', 'slcbr'], comp: ['slcomp'] };
+const ABAS_PARTE_SL = { granul: 'slgranul', sed: 'slsed', lim: 'sllim', comp: 'slcomp', isc: 'slcbr', insitu: 'slinsitu' };
+function abasSlabDoPlano(calc = null) {
+  const s = estado.slab;
+  // sem a lista do que o plano pede (ensaio antigo ligado ao plano): todas as abas
+  if (!s || !s.plano || !s.plano.ensaios || !Object.values(s.plano.ensaios).some(Boolean)) return null;
+  const abas = new Set(['slident', 'slbol']);
+  Object.entries(s.plano.ensaios).forEach(([k, v]) => { if (v) (ABAS_DO_TIPO_SL[k] || []).forEach(a => abas.add(a)); });
+  const q = calc || (typeof ULTIMO_CALCULO !== 'undefined' && ULTIMO_CALCULO && ULTIMO_CALCULO.slab);
+  if (q && !q.erro) { const pt = partesSlab(q); Object.entries(ABAS_PARTE_SL).forEach(([k, a]) => { if (pt[k]) abas.add(a); }); }
+  return abas;
+}
+function aplicarAbasDoPlanoSl(calc = null) {
+  const abas = estado.modo === 'slab' ? abasSlabDoPlano(calc) : null;
+  document.querySelectorAll('[data-modos="slab"][data-aba], section.aba[data-modos="slab"]').forEach(el => {
+    const aba = el.dataset.aba || el.id.replace('aba-', '');
+    el.classList.toggle('fora-do-plano', !!abas && !abas.has(aba));
+  });
+  const ativa = document.querySelector('section.aba.ativa');
+  if (ativa && ativa.classList.contains('fora-do-plano')) irParaAba('slident');
+}
+/** As folhas do laudo que este ensaio tem (folha 1: granulometria/limites; 2: compactação/ISC; in situ) e a numeração. */
+function folhasDoLaudoSl(r) {
+  const abas = abasSlabDoPlano(r), pt = r && !r.erro ? partesSlab(r) : {};
+  const tem = { f1: !abas || ['slgranul', 'slsed', 'sllim'].some(a => abas.has(a)) || pt.granul || pt.sed || pt.lim,
+    f2: !abas || ['slcomp', 'slcbr'].some(a => abas.has(a)) || pt.comp || pt.isc, in: !!(r && r.insitu && ehNumero(r.insitu.gh)) };
+  const lista = ['f1', 'f2', 'in'].filter(k => tem[k]);
+  return { tem, num: k => `${String(lista.indexOf(k) + 1).padStart(2, '0')}/${String(lista.length).padStart(2, '0')}` };
 }
 
 /* ---------- IN SITU ---------- */
@@ -14446,7 +14487,7 @@ function rodapeSl(folha) {
 }
 
 function folhaSlab1(pacote, pagina, total) {
-  const r = pacote && pacote.slab; if (!r || r.erro) return [];
+  const r = pacote && pacote.slab; if (!r || r.erro || !folhasDoLaudoSl(r).tem.f1) return [];
   const s = estado.slab, E = r.E, m = estado.medicao, id = s.ident, gr = r.gr, L = r.lim;
   /* 1 · higroscópica */
   const hc = r.hig.capsulas;
@@ -14544,12 +14585,12 @@ function folhaSlab1(pacote, pagina, total) {
     <div class="sl-col2"><div class="esq">${ll}</div><div class="dir">${lp}</div></div>
     <div class="sl-graflim"><div class="g1"><div class="tg">GRÁFICO DO LIMITE DE LIQUIDEZ</div>${svgLLSl(r, 250, 165, 8)}</div>
       <div class="g1"><div class="tg">GRÁFICO DO LIMITE DE PLASTICIDADE</div>${svgPlastSl(r, 250, 165, 8)}</div><div class="g2">${resLim}</div></div>
-    ${rodapeSl(insituPreenchido() ? '01/03' : '01/02')}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('f1'))}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
 }
 
 function folhaSlab2(pacote, pagina, total) {
-  const r = pacote && pacote.slab; if (!r || r.erro) return [];
+  const r = pacote && pacote.slab; if (!r || r.erro || !folhasDoLaudoSl(r).tem.f2) return [];
   const s = estado.slab, E = r.E, m = estado.medicao, id = s.ident, C = r.comp, I = r.cbr;
   const c5 = f => P5SL.map(i => `<td class="c" colspan="3">${f(i)}</td>`).join('');
   const comp = `<table class="g comp"><colgroup><col style="width:22%">${Array.from({ length: 15 }, () => '<col style="width:5.2%">').join('')}</colgroup>
@@ -14597,7 +14638,7 @@ function folhaSlab2(pacote, pagina, total) {
     ${comp}${graf}
     ${barraSl('DNIT 172/2016-ME', 'CBR', m.registro, id.dataCbr || id.dataComp)}
     <div class="sl-cbr">${P5SL.map(bloco).join('')}</div>
-    ${rodapeSl(insituPreenchido() ? '02/03' : '02/02')}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('f2'))}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
 }
 
@@ -14631,7 +14672,7 @@ function folhaSlabInsitu(pacote) {
       ${caixa('Grau de Compactação', ehNumero(N.gc) ? nf(N.gc, 1) : '—', '%')}${caixa('Desvio da umidade ótima', ehNumero(N.dw) ? (N.dw >= 0 ? '+' : '') + nf(N.dw, 1) : '—', 'p.p.')}</div></div>
     ${I.obs ? `<table class="g"><tr><td class="r" style="width:34%">Observações</td><td>${esc(I.obs)}</td></tr></table>` : ''}
     ${ehNumero(N.gc) ? `<p style="font-size:7.5pt;margin:1.5mm 0">Grau de compactação em relação ao peso específico seco máximo de ${nf(r.comp.dmax, 3)} g/cm³ e umidade ótima de ${nf(r.comp.hot, 1)} % (ensaio de compactação deste registro).</p>` : ''}
-    ${rodapeSl('03/03')}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('in'))}`;
   return [`<div class="folha nsl">${corpo}</div>`];
 }
 
