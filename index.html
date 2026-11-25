@@ -961,6 +961,7 @@ body.com-acesso{overflow:hidden;}
 .anexo-pdf{font-weight:700; color:var(--danger); font-size:20px;}
 .anexo-sem{font-size:11px; color:var(--text-mut); padding:6px; text-align:center;}
 .anexo figcaption{word-break:break-word; line-height:1.25;}
+.anexo-acoes{display:flex; flex-wrap:wrap; gap:6px;} .anexo-acoes .btn{flex:1 1 auto;}
 .anexo-visor{position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,.88); display:flex; flex-direction:column;}
 .anexo-visor[hidden]{display:none;}
 .anexo-visor-topo{display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:var(--card); color:var(--text);}
@@ -24698,7 +24699,8 @@ function htmlAnexos(aba, lista) {
       <button type="button" class="anexo-ver" data-anexo-ver="${atr(aba)}|${atr(a.id)}" title="Ampliar">
         ${ehPdfAnexo(a) ? '<span class="anexo-pdf">PDF</span>' : `<img alt="rascunho" data-anexo-img="${atr(a.id)}">`}</button>
       <figcaption>${atr(a.nome || 'foto')}<br><span class="hint">${situacaoAnexo(a)}${a.registro && reg && a.registro !== reg ? ` · <b>registro ${atr(a.registro)}</b>` : ''}</span></figcaption>
-      <button type="button" class="btn ghost sm anexo-tirar" data-anexo-tirar="${atr(aba)}|${atr(a.id)}">Remover</button>
+      <div class="anexo-acoes"><button type="button" class="btn ghost sm" data-anexo-guia="${atr(aba)}|${atr(a.id)}" title="Abrir numa guia separada, para comparar com o que foi lançado">↗ Outra guia</button>
+      <button type="button" class="btn ghost sm anexo-tirar" data-anexo-tirar="${atr(aba)}|${atr(a.id)}">Remover</button></div>
     </figure>`).join('')}</div>`;
 }
 
@@ -24748,6 +24750,7 @@ async function abrirVisorAnexos(lista, i = 0) {
       <span class="hint">${i + 1} de ${lista.length} · ${atr(a.nome || '')}${a.por ? ' · ' + atr(a.por) : ''}</span>
       <span class="anexo-visor-botoes">
         ${lista.length > 1 ? `<button class="btn ghost sm" type="button" data-visor="-1">◀</button><button class="btn ghost sm" type="button" data-visor="1">▶</button>` : ''}
+        <button class="btn ghost sm" type="button" data-visor="guia" title="Abrir numa guia separada, para comparar com o que foi lançado">↗ Outra guia</button>
         ${a.url ? `<a class="btn ghost sm" href="${atr(a.url)}" target="_blank" rel="noopener">Abrir no Drive</a>` : ''}
         <button class="btn sm" type="button" data-visor="fechar">Fechar</button></span></div>
     <div class="anexo-visor-corpo" id="anexoVisorCorpo"><p class="hint">Abrindo…</p></div>`;
@@ -24766,6 +24769,63 @@ async function abrirVisorAnexos(lista, i = 0) {
   preencherImagem(img, a);
 }
 
+/* ------------------------------------------------------------
+   Rascunho numa guia separada: o laboratorista/gestor deixa a foto de um lado
+   e o ensaio do outro, e confere o que foi lançado contra o papel.
+   ------------------------------------------------------------ */
+async function abrirAnexosEmGuia(lista, i = 0) {
+  if (!lista.length) return;
+  // a guia abre já, no toque (senão o navegador bloqueia); as fotos chegam depois
+  const w = window.open('', '_blank');
+  if (!w) return void abrirVisorAnexos(lista, i);           // guia bloqueada: abre aqui mesmo
+  const reg = (estado.medicao || {}).registro || '', furo = (estado.medicao || {}).furo || '';
+  const titulo = ['Rascunho', reg, furo].filter(Boolean).join(' · ');
+  try { w.document.write(`<!doctype html><meta charset="utf-8"><title>${atr(titulo)}</title><p style="font:16px Arial;padding:20px">Abrindo o rascunho…</p>`); } catch (e) {}
+  const itens = [];
+  for (const { aba, a } of lista) {
+    const url = await urlDoAnexo(a, { baixar: true }).catch(() => null);
+    itens.push({ rot: rotuloAbaAnexo(aba), nome: a.nome || '', por: a.por || '', pdf: ehPdfAnexo(a), url: url || (a.fileId ? miniaturaDrive(a) : ''), drive: a.url || '' });
+  }
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${atr(titulo)}</title><style>
+  *{box-sizing:border-box} html,body{margin:0;height:100%;background:#1e1f22;color:#eee;font:14px Arial,Helvetica,sans-serif}
+  .barra{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:#2b2d31;border-bottom:1px solid #444}
+  .barra b{font-size:15px} .barra .info{color:#aaa;flex:1;min-width:160px}
+  button,a.bt{background:#3a3d43;color:#fff;border:1px solid #555;border-radius:8px;padding:7px 12px;font:600 13px Arial;cursor:pointer;text-decoration:none}
+  button:hover,a.bt:hover{background:#4a4e55}
+  .palco{display:flex;justify-content:center;align-items:flex-start;padding:12px;min-height:calc(100% - 52px);overflow:auto}
+  .palco img{max-width:100%;transition:transform .15s;transform-origin:center center;background:#fff;cursor:zoom-in}
+  .palco.real img{max-width:none;cursor:zoom-out}
+  .palco iframe{width:100%;height:calc(100vh - 80px);border:0;background:#fff}
+  .vazio{color:#aaa;padding:40px}
+</style></head><body>
+<div class="barra"><b id="rot"></b><span class="info" id="info"></span>
+  ${itens.length > 1 ? '<button id="ant">◀</button><button id="prox">▶</button>' : ''}
+  <button id="girar">↻ Girar</button><button id="zoom">Tamanho real</button><a class="bt" id="drive" target="_blank" rel="noopener" hidden>Abrir no Drive</a></div>
+<div class="palco" id="palco"></div>
+<script>
+const itens = ${JSON.stringify(itens).replace(/</g, '\\u003c')}; let i = ${i}, giro = 0;
+const $ = id => document.getElementById(id);
+function mostra() {
+  const x = itens[i]; giro = 0;
+  $('rot').textContent = x.rot; $('info').textContent = (itens.length > 1 ? (i + 1) + ' de ' + itens.length + ' · ' : '') + x.nome + (x.por ? ' · ' + x.por : '');
+  $('drive').hidden = !x.drive; if (x.drive) $('drive').href = x.drive;
+  $('girar').hidden = $('zoom').hidden = x.pdf;
+  const p = $('palco'); p.classList.remove('real'); $('zoom').textContent = 'Tamanho real';
+  p.innerHTML = !x.url ? '<p class="vazio">Não consegui abrir esta foto (ainda não chegou a este aparelho).</p>'
+    : x.pdf ? '<iframe title="PDF"></iframe>' : '<img alt="rascunho">';
+  const el = p.firstElementChild; if (x.url && el) el.src = x.url;
+  if (el && el.tagName === 'IMG') el.onclick = () => $('zoom').click();
+}
+if ($('ant')) { $('ant').onclick = () => { i = (i - 1 + itens.length) % itens.length; mostra(); }; $('prox').onclick = () => { i = (i + 1) % itens.length; mostra(); }; }
+$('girar').onclick = () => { giro = (giro + 90) % 360; const im = document.querySelector('.palco img'); if (im) im.style.transform = 'rotate(' + giro + 'deg)'; };
+$('zoom').onclick = () => { const p = $('palco'); p.classList.toggle('real'); $('zoom').textContent = p.classList.contains('real') ? 'Ajustar à tela' : 'Tamanho real'; };
+document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' && $('ant')) $('ant').click(); if (e.key === 'ArrowRight' && $('prox')) $('prox').click(); });
+mostra();
+<\/script></body></html>`;
+  try { w.document.open(); w.document.write(html); w.document.close(); } catch (e) {}
+}
+
 function fecharVisorAnexos() { const v = $('anexoVisor'); if (v) { v.hidden = true; v.innerHTML = ''; } visorAnexos = null; }
 
 /** Todos os anexos de um ensaio salvo, aba por aba, para o cartão da aprovação. */
@@ -24775,9 +24835,15 @@ function anexosDoEnsaio(e) {
 }
 
 document.addEventListener('click', ev => {
-  const t = ev.target.closest('[data-anexo-ver],[data-anexo-tirar],[data-visor],[data-aprov-anexos]');
+  const t = ev.target.closest('[data-anexo-ver],[data-anexo-tirar],[data-anexo-guia],[data-visor],[data-aprov-anexos]');
   if (!t) return;
   const d = t.dataset;
+  if (d.anexoGuia) {
+    const [aba, id] = d.anexoGuia.split('|');
+    const lista = anexosDaAba(aba).map(a => ({ aba, a }));
+    return void abrirAnexosEmGuia(lista, Math.max(0, lista.findIndex(x => x.a.id === id)));
+  }
+  if (d.visor === 'guia' && visorAnexos) { const { lista, i } = visorAnexos; fecharVisorAnexos(); return void abrirAnexosEmGuia(lista, i); }
   if (d.anexoVer) {
     const [aba, id] = d.anexoVer.split('|');
     const lista = anexosDaAba(aba).map(a => ({ aba, a }));
