@@ -3450,6 +3450,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <!-- ============ ENSAIO DE SOLOS — LABORATÓRIO (2 folhas) ============ -->
 <section class="aba" id="aba-slident" data-fam="solos" data-modos="slab"><div id="slIdent"></div><div data-pdfslot="slident"></div></section>
 <section class="aba" id="aba-slbol" data-fam="solos" data-modos="slab"><div id="slBol"></div><div data-pdfslot="slbol"></div></section>
+<section class="aba" id="aba-slinsitu" data-fam="solos" data-modos="slab"><div id="slInsitu"></div><div data-pdfslot="slinsitu"></div></section>
 <section class="aba" id="aba-slgranul" data-fam="solos" data-modos="slab"><div id="slGranul"></div><div data-pdfslot="slgranul"></div></section>
 <section class="aba" id="aba-slsed" data-fam="solos" data-modos="slab"><div id="slSed"></div><div data-pdfslot="slsed"></div></section>
 <section class="aba" id="aba-sllim" data-fam="solos" data-modos="slab"><div id="slLim"></div><div data-pdfslot="sllim"></div></section>
@@ -4082,6 +4083,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <button type="button" data-aba="slbol" data-fam="solos" data-modos="slab">
     <svg viewBox="0 0 24 24"><path d="M12 2v7"/><path d="M8 9h8l-1 13H9z"/><path d="M9 14h6M9 18h6"/></svg>
     Boletim
+  </button>
+  <button type="button" data-aba="slinsitu" data-fam="solos" data-modos="slab">
+    <svg viewBox="0 0 24 24"><path d="M8 3h8v4H8z"/><path d="M9 7v12a3 3 0 0 0 6 0V7"/><path d="M4 21h16"/></svg>
+    In situ
   </button>
   <button type="button" data-aba="slgranul" data-fam="solos" data-modos="slab">
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
@@ -12953,7 +12958,7 @@ const FOLHAS_DA_ABA_CS = {
   m31granul: ['m031Teor'], m31rice: ['m031Marshall'], m31marshall: ['m031Marshall'], m31rtd: ['m031Marshall'],
   m31dens: ['m031Dens'], m31agran: ['m031Agr'],
   // ensaio de solos de laboratório: folha 1 (granulometria, massa específica, limites) e folha 2 (compactação e ISC)
-  slident: null, slbol: ['slabBol'], slgranul: ['slab1'], slsed: ['slab1'], sllim: ['slab1'], slcomp: ['slab2'], slcbr: ['slab2'],
+  slident: null, slbol: ['slabBol'], slinsitu: ['slabIn'], slgranul: ['slab1'], slsed: ['slab1'], sllim: ['slab1'], slcomp: ['slab2'], slcbr: ['slab2'],
 };
 const NOME_PDF_ABA_CS = { csident: 'o laudo completo (todas as folhas)', csproctor: 'a folha de compactação',
   csisc: 'as folhas do ISC', cslimites: 'a folha de caracterização (limites, HRB e SUCS)',
@@ -12963,11 +12968,11 @@ const NOME_PDF_ABA_CS = { csident: 'o laudo completo (todas as folhas)', csproct
   m31rice: 'a folha do ensaio Marshall (Rice, CPs e RTD)', m31marshall: 'a folha do ensaio Marshall (Rice, CPs e RTD)',
   m31rtd: 'a folha do ensaio Marshall (Rice, CPs e RTD)', m31dens: 'a folha de absorção e densidade dos agregados',
   m31agran: 'a folha da granulometria dos agregados',
-  slident: 'o laudo completo (boletim de sondagem e as 2 folhas)', slbol: 'o boletim de sondagem à trado (NBR 9603)', slgranul: 'a folha 1 (granulometria, sedimentação, massa específica e limites)',
+  slident: 'o laudo completo (boletim de sondagem e as 2 folhas)', slbol: 'o boletim de sondagem à trado (NBR 9603)', slinsitu: 'a folha da massa específica aparente in situ', slgranul: 'a folha 1 (granulometria, sedimentação, massa específica e limites)',
   slsed: 'a folha 1 (granulometria, sedimentação, massa específica e limites)', sllim: 'a folha 1 (granulometria, sedimentação, massa específica e limites)',
   slcomp: 'a folha 2 (compactação e ISC)', slcbr: 'a folha 2 (compactação e ISC)' };
 const ABAS_COM_SALVAR = ['m31granul', 'm31rice', 'm31marshall', 'm31rtd', 'm31dens', 'm31agran',
-  'slident', 'slbol', 'slgranul', 'slsed', 'sllim', 'slcomp', 'slcbr'];
+  'slident', 'slbol', 'slinsitu', 'slgranul', 'slsed', 'sllim', 'slcomp', 'slcbr'];
 const ABAS_LAUDO_INTEIRO = ['csident', 'slident'];
 const ABAS_SO_SALVAR = ['slident'];
 
@@ -13471,8 +13476,16 @@ function novoSlab(cfg = cfgSlabPadrao()) {
            tipo: 'trado', dataFim: '', naHora: '', verificacao: '', revisao: '', contrato: '', cidade: '', spt: [],
            metodos: { cavadeira: { de: null, ate: null }, espiral: { de: null, ate: null }, lavagem: { de: null, ate: null } },
            lavTempo: { inicio: null, e1: null, e2: null, e3: null } },
+    insitu: insituVazio(),
   };
 }
+
+/* Massa específica aparente in situ do furo (sondagem a trado): cilindro de cravação (NBR 9813)
+   ou frasco de areia (NBR 7185 / DNER-ME 092/94). Aba "In situ" do ensaio. */
+const insituVazio = () => ({ metodo: 'cilindro', data: '', prof: '', operador: '', obs: '',
+  cil: { numero: '', peso: null, volume: null, diametro: null, altura: null, cilSolo: null },
+  fr: { numero: '', densAreia: null, cone: null, antes: null, depois: null, soloTara: null, tara: null },
+  umid: Array.from({ length: 3 }, () => ({ capsula: '', umido: null, seco: null })) });
 
 const SLAB_PADRAO = novoSlab();
 
@@ -13561,6 +13574,8 @@ function ligarSlab() {
       atualizar();
     });
   }
+  document.querySelectorAll('[data-insmetodo]').forEach(bt => { if (bt.dataset.ligado) return; bt.dataset.ligado = '1';
+    bt.addEventListener('click', () => { estado.slab.insitu.metodo = bt.dataset.insmetodo; montarSlab(); atualizar(); }); });
   const g = $('btnGuardarCfgSl');
   if (g && !g.dataset.ligado) { g.dataset.ligado = '1'; g.addEventListener('click', guardarCfgSlab); }
   const fr = $('btnFichasSlab');
@@ -13651,11 +13666,53 @@ function entradasSlab() {
   };
 }
 
+/** In situ: massa específica aparente úmida e seca, umidade e grau de compactação (com a compactação do ensaio). */
+function calcularInsituSl(r) {
+  const I = estado.slab.insitu; if (!I) return null;
+  const faltas = [];
+  const caps = I.umid.map((c, i) => {
+    const tara = taraSl(c.capsula, 'capsulas');
+    if (String(c.capsula ?? '').trim() && tara === null) faltas.push(`cápsula ${c.capsula} (in situ ${i + 1})`);
+    const ok = [tara, c.umido, c.seco].every(ehNumero) && c.seco > tara && c.umido >= c.seco;
+    return { tara, agua: ok ? c.umido - c.seco : null, seco: ok ? c.seco - tara : null, umidade: ok ? 100 * (c.umido - c.seco) / (c.seco - tara) : null };
+  });
+  const ws = caps.map(c => c.umidade).filter(ehNumero);
+  const w = ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : null;
+  let volume = null, soloUmido = null;
+  const extra = {};
+  if (I.metodo === 'frasco') {
+    const F = I.fr, cad = itemDaBancada('frascos', F.numero);
+    // cadastro de frascos: densidade da areia em kg/m³ (1386 = 1,386 g/cm³)
+    const dens = ehNumero(F.densAreia) ? F.densAreia : (cad && ehNumero(cad.densidadeAreia) ? cad.densidadeAreia / (cad.densidadeAreia > 10 ? 1000 : 1) : null);
+    const cone = ehNumero(F.cone) ? F.cone : (cad && ehNumero(cad.areiaDoCone) ? cad.areiaDoCone : null);
+    const areiaFuro = [F.antes, F.depois, cone].every(ehNumero) ? F.antes - F.depois - cone : null;
+    volume = ehNumero(areiaFuro) && areiaFuro > 0 && ehNumero(dens) && dens > 0 ? areiaFuro / dens : null;
+    soloUmido = ehNumero(F.soloTara) ? F.soloTara - (ehNumero(F.tara) ? F.tara : 0) : null;
+    if (String(F.numero ?? '').trim() && !cad && !(ehNumero(F.densAreia) && ehNumero(F.cone))) faltas.push(`frasco de areia ${F.numero}`);
+    Object.assign(extra, { dens, cone, areiaFuro, doCadastro: !!cad && !(ehNumero(F.densAreia) && ehNumero(F.cone)) });
+  } else {
+    const C = I.cil;
+    // volume gravado no cilindro; sem ele, pelas medidas (diâmetro e altura internos, em cm)
+    volume = ehNumero(C.volume) ? C.volume : (ehNumero(C.diametro) && ehNumero(C.altura) ? Math.PI * C.diametro * C.diametro / 4 * C.altura : null);
+    soloUmido = ehNumero(C.cilSolo) && ehNumero(C.peso) ? C.cilSolo - C.peso : null;
+  }
+  const gh = ehNumero(soloUmido) && soloUmido > 0 && ehNumero(volume) && volume > 0 ? soloUmido / volume : null;
+  const gs = ehNumero(gh) && ehNumero(w) ? gh / (1 + w / 100) : null;
+  const dmax = r && r.comp ? r.comp.dmax : null, hot = r && r.comp ? r.comp.hot : null;
+  return { metodo: I.metodo === 'frasco' ? 'frasco' : 'cilindro', caps, w, volume, soloUmido, gh, gs, faltas, ...extra,
+    gc: ehNumero(gs) && ehNumero(dmax) && dmax > 0 ? 100 * gs / dmax : null, dw: ehNumero(w) && ehNumero(hot) ? w - hot : null };
+}
+const insituPreenchido = () => { const q = typeof ULTIMO_CALCULO !== 'undefined' && ULTIMO_CALCULO && ULTIMO_CALCULO.slab;
+  return !!(q && q.insitu && ehNumero(q.insitu.gh)); };
+
 function calcularSlabTela() {
   const { E, faltas } = entradasSlab();
   let r;
+  if (estado.slab && !estado.slab.insitu) estado.slab.insitu = insituVazio();   // ensaio de antes da aba In situ
   try { r = SLAB.calcularSlab(E); } catch (e) { return { erro: e.message, faltas }; }
   r.E = E; r.faltas = faltas;
+  r.insitu = calcularInsituSl(r);
+  if (r.insitu) r.faltas = [...faltas, ...r.insitu.faltas];
   const id = estado.slab.ident;
   r.descricao = (id.descricao || '').trim() || [r.desc.texto.replace(/,\s*$/, ''), (id.cor || '').trim()].filter(Boolean).join(', ');
   return r;
@@ -13713,6 +13770,7 @@ function doPlanoSl(k, html) {
 function montarSlab() {
   const s = estado.slab;
   if (!s || !$('slIdent')) return;
+  if (!s.insitu) s.insitu = insituVazio();
   const cfg = s.cfg, m = estado.medicao;
 
   /* ---------- IDENTIFICAÇÃO ---------- */
@@ -13980,6 +14038,7 @@ function montarSlab() {
       <div class="sl-graf-par"><div class="sl-graf" id="slGrafCbr"></div><div class="sl-graf" id="slGrafExp"></div></div>
     </div>`;
   if ($('slBol') && typeof htmlAbaBoletimSlab === 'function') $('slBol').innerHTML = htmlAbaBoletimSlab();
+  if ($('slInsitu')) $('slInsitu').innerHTML = htmlAbaInsituSl();
   // calibrações do laboratório de solos: ficam em Dados gerais (não mudam de um ensaio para o outro)
   const gCal = document.querySelector('[data-grupo="calibSlab"]');
   if (gCal) gCal.hidden = !(MODOS_DA_FAMILIA.solos || []).includes('slab');
@@ -14009,6 +14068,70 @@ function montarSlab() {
   // só o toque da pessoa conta (o "aberto" automático de quando falta dado não fica lembrado)
   if (ob) ob.querySelector('summary').addEventListener('click', () => { SL_OBRA_ABERTA = !ob.open; });
   if (typeof ligarAbaBoletimSlab === 'function') ligarAbaBoletimSlab();
+}
+
+/* ---------- IN SITU ---------- */
+function htmlAbaInsituSl() {
+  const s = estado.slab, I = s.insitu, fr = I.metodo === 'frasco';
+  const semPedido = s.plano && s.plano.ensaios && !s.plano.ensaios.insitu;
+  const bt = (k, rot, sub) => `<button type="button" class="pl-passo${(I.metodo === 'frasco') === (k === 'frasco') ? ' feito proximo' : ''}" data-insmetodo="${k}"><span class="rot">${rot}</span><span class="hr">${sub}</span></button>`;
+  return cartaoRascunho('slinsitu') + (semPedido ? `<div class="aviso agenda"><span class="ico">i</span><span>O plano <b>não pede densidade in situ</b> para o ${atr(s.plano.st)}.</span></div>` : '') + `
+    <div class="card">
+      <h2>Massa específica aparente in situ <span class="tag">${fr ? 'NBR 7185 · DNER-ME 092/94' : 'NBR 9813'}</span></h2>
+      <div class="pl-passos" style="grid-template-columns:1fr 1fr">${bt('cilindro', 'Cilindro de cravação', 'NBR 9813')}${bt('frasco', 'Frasco de areia', 'NBR 7185')}</div>
+      <div class="grid4">
+        <div><label>Data de execução</label>${dSl('insitu.data')}</div>
+        <div><label>Profundidade / posição</label>${tSl('insitu.prof', 'Ex.: 0,30 m', false)}</div>
+        <div><label>Operador</label>${tSl('insitu.operador')}</div>
+        <div><label>Observações</label>${tSl('insitu.obs', '', false)}</div>
+      </div>
+    </div>
+    <div class="card">
+      ${fr ? `<h2>Frasco de areia <span class="tag">volume do furo</span></h2>
+      <div class="grid4">
+        <div><label>Frasco nº</label>${tSl('insitu.fr.numero')}</div>
+        <div><label>Densidade da areia (g/cm³) <span class="hint" id="slInDensCad"></span></label>${nSl('insitu.fr.densAreia', '0.001')}</div>
+        <div><label>Areia no cone (g) <span class="hint" id="slInConeCad"></span></label>${nSl('insitu.fr.cone', '0.1')}</div>
+        <div><label>Frasco + areia antes (g)</label>${nSl('insitu.fr.antes', '0.1')}</div>
+        <div><label>Frasco + areia depois (g)</label>${nSl('insitu.fr.depois', '0.1')}</div>
+        <div><label>Areia no furo (g)</label><div class="num calc-box" id="slInAreia">—</div></div>
+        <div><label>Volume do furo (cm³)</label><div class="num calc-box" id="slInVol">—</div></div>
+      </div>
+      <h3 class="sub-card">Solo retirado do furo</h3>
+      <div class="grid4">
+        <div><label>Solo úmido + recipiente (g)</label>${nSl('insitu.fr.soloTara', '0.1')}</div>
+        <div><label>Recipiente (g)</label>${nSl('insitu.fr.tara', '0.1')}</div>
+        <div><label>Solo úmido (g)</label><div class="num calc-box" id="slInSolo">—</div></div>
+      </div>` : `<h2>Cilindro de cravação <span class="tag">volume do cilindro</span></h2>
+      <div class="grid4">
+        <div><label>Cilindro nº</label>${tSl('insitu.cil.numero')}</div>
+        <div><label>Peso do cilindro (g)</label>${nSl('insitu.cil.peso', '0.1')}</div>
+        <div><label>Volume do cilindro (cm³)</label>${nSl('insitu.cil.volume', '0.01')}</div>
+        <div><label>Cilindro + solo úmido (g)</label>${nSl('insitu.cil.cilSolo', '0.1')}</div>
+        <div><label>Diâmetro interno (cm) <span class="hint">sem o volume</span></label>${nSl('insitu.cil.diametro', '0.01')}</div>
+        <div><label>Altura (cm) <span class="hint">sem o volume</span></label>${nSl('insitu.cil.altura', '0.01')}</div>
+        <div><label>Volume usado (cm³)</label><div class="num calc-box" id="slInVol">—</div></div>
+        <div><label>Solo úmido (g)</label><div class="num calc-box" id="slInSolo">—</div></div>
+      </div>`}
+    </div>
+    <div class="card">
+      <h2>Umidade do solo <span class="tag">estufa</span></h2>
+      <div class="tabwrap"><table class="t-form t-pontos"><thead><tr><th></th><th>1</th><th>2</th><th>3</th></tr></thead><tbody>
+        <tr><td class="cap">Cápsula n.º</td>${[0, 1, 2].map(i => `<td data-rot="${i + 1}">${capSl(`insitu.umid.${i}.capsula`)}</td>`).join('')}</tr>
+        <tr class="calc"><td class="cap">Peso da cápsula (g)</td>${[0, 1, 2].map(i => `<td class="num" id="slInT${i}">—</td>`).join('')}</tr>
+        <tr><td class="cap">Cápsula + solo úmido (g)</td>${[0, 1, 2].map(i => `<td>${nSl(`insitu.umid.${i}.umido`)}</td>`).join('')}</tr>
+        <tr><td class="cap">Cápsula + solo seco (g)</td>${[0, 1, 2].map(i => `<td>${nSl(`insitu.umid.${i}.seco`)}</td>`).join('')}</tr>
+        <tr class="calc"><td class="cap">Umidade (%)</td>${[0, 1, 2].map(i => `<td class="num" id="slInU${i}">—</td>`).join('')}</tr>
+      </tbody></table></div>
+      <div id="slInAviso"></div>
+      <div class="tiles" style="margin-top:12px">
+        <div class="tile"><div class="k">γ úmida in situ</div><div class="v" id="slInGh">—</div></div>
+        <div class="tile"><div class="k">Umidade in situ</div><div class="v" id="slInW">—</div></div>
+        <div class="tile destaque"><div class="k">γs in situ (seca)</div><div class="v" id="slInGs">—</div></div>
+        <div class="tile destaque"><div class="k">Grau de compactação</div><div class="v" id="slInGc">—</div></div>
+      </div>
+      <p class="hint" style="margin:8px 0 0" id="slInGcHint">O grau de compactação usa o γs máx. da compactação deste ensaio.</p>
+    </div>`;
 }
 
 function desenharTelaSlab(r) {
@@ -14071,6 +14194,19 @@ function desenharTelaSlab(r) {
   putSl('slIscC', vSl(I.cbrCalc, 1, '%')); putSl('slExpC', vSl(I.expCalc, 2, '%'));
   putSl('slTDmax', vSl(C.dmax, 3, 'g/cm³')); putSl('slTHot', vSl(C.hot, 2, '%'));
   putSl('slTIsc', vSl(I.cbr, 1, '%')); putSl('slTExp', vSl(I.expansao, 2, '%'));
+  // in situ
+  const N = r.insitu;
+  if (N) {
+    N.caps.forEach((c, i) => { putSl('slInT' + i, vSl(c.tara, 2)); putSl('slInU' + i, vSl(c.umidade, 2)); });
+    putSl('slInVol', vSl(N.volume, 2)); putSl('slInSolo', vSl(N.soloUmido, 1)); putSl('slInAreia', vSl(N.areiaFuro, 1));
+    putSl('slInDensCad', N.doCadastro && ehNumero(N.dens) ? `cadastro: ${fmt(N.dens, 3)}` : '');
+    putSl('slInConeCad', N.doCadastro && ehNumero(N.cone) ? `cadastro: ${fmt(N.cone, 0)}` : '');
+    putSl('slInGh', vSl(N.gh, 3, 'g/cm³')); putSl('slInW', vSl(N.w, 2, '%')); putSl('slInGs', vSl(N.gs, 3, 'g/cm³'));
+    putSl('slInGc', vSl(N.gc, 1, '%'));
+    putSl('slInGcHint', ehNumero(N.gc) ? `GC = γs in situ ÷ γs máx. ${fmt(C.dmax, 3)} g/cm³ da compactação deste ensaio · umidade ${N.dw >= 0 ? '+' : ''}${fmt(N.dw, 1)} ponto(s) da ótima.`
+      : 'O grau de compactação usa o γs máx. da compactação deste ensaio (aba Compact.).');
+    putSl('slInAviso', N.faltas.length ? `<div class="aviso"><span class="ico">!</span><span>Não está no cadastro: <b>${N.faltas.join(', ')}</b>.</span></div>` : '');
+  }
   // gráficos da tela (o mesmo desenho da folha)
   const ativa = id => { const e = $(id); return e && e.closest('section.aba.ativa') ? e : null; };
   let g;
@@ -14406,7 +14542,7 @@ function folhaSlab1(pacote, pagina, total) {
     <div class="sl-col2"><div class="esq">${ll}</div><div class="dir">${lp}</div></div>
     <div class="sl-graflim"><div class="g1"><div class="tg">GRÁFICO DO LIMITE DE LIQUIDEZ</div>${svgLLSl(r, 250, 165, 8)}</div>
       <div class="g1"><div class="tg">GRÁFICO DO LIMITE DE PLASTICIDADE</div>${svgPlastSl(r, 250, 165, 8)}</div><div class="g2">${resLim}</div></div>
-    ${rodapeSl('01/02')}`;
+    ${rodapeSl(insituPreenchido() ? '01/03' : '01/02')}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
 }
 
@@ -14459,8 +14595,42 @@ function folhaSlab2(pacote, pagina, total) {
     ${comp}${graf}
     ${barraSl('DNIT 172/2016-ME', 'CBR', m.registro, id.dataCbr || id.dataComp)}
     <div class="sl-cbr">${P5SL.map(bloco).join('')}</div>
-    ${rodapeSl('02/02')}`;
+    ${rodapeSl(insituPreenchido() ? '02/03' : '02/02')}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
+}
+
+/** Folha 3 do laudo: massa específica aparente in situ (só quando a aba In situ tem resultado). */
+function folhaSlabInsitu(pacote) {
+  const r = pacote && pacote.slab; if (!r || r.erro || !r.insitu || !ehNumero(r.insitu.gh)) return [];
+  const s = estado.slab, I = s.insitu, N = r.insitu, m = estado.medicao, fr = N.metodo === 'frasco';
+  const L = (rot, v) => `<tr><td class="r">${rot}</td><td class="c" colspan="3">${v}</td></tr>`;
+  const ent = fr ? [['Frasco n.º', esc(I.fr.numero)], ['Densidade da areia (g/cm³)', nf(N.dens, 3)], ['Areia no cone (g)', nf(N.cone, 1)],
+      ['Frasco + areia antes (g)', nf(I.fr.antes, 1)], ['Frasco + areia depois (g)', nf(I.fr.depois, 1)], ['Areia no furo (g)', nf(N.areiaFuro, 1)],
+      ['Volume do furo (cm³)', nf(N.volume, 2)], ['Solo úmido + recipiente (g)', nf(I.fr.soloTara, 1)], ['Recipiente (g)', nf(I.fr.tara, 1)], ['Solo úmido (g)', nf(N.soloUmido, 1)]]
+    : [['Cilindro n.º', esc(I.cil.numero)], ['Peso do cilindro (g)', nf(I.cil.peso, 1)], ['Volume do cilindro (cm³)', nf(N.volume, 2)],
+      ['Cilindro + solo úmido (g)', nf(I.cil.cilSolo, 1)], ['Solo úmido (g)', nf(N.soloUmido, 1)]];
+  const caps = `<table class="g"><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup>
+    <tr class="tt"><td colspan="4">Determinação da Umidade</td></tr>
+    ${[['Cápsula Nº', i => esc(I.umid[i].capsula)], ['Peso da Cápsula (g)', i => nf(N.caps[i].tara, 2)], ['Cápsula + Solo Úmido (g)', i => nf(I.umid[i].umido, 2)],
+       ['Cápsula + Solo Seco (g)', i => nf(I.umid[i].seco, 2)], ['Peso da Água (g)', i => nf(N.caps[i].agua, 2)], ['Peso do Solo Seco (g)', i => nf(N.caps[i].seco, 2)],
+       ['Teor de Umidade (%)', i => nf(N.caps[i].umidade, 2)]].map(([rot, f]) => `<tr><td class="r">${rot}</td>${[0, 1, 2].map(i => tdv(f(i), 'c')).join('')}</tr>`).join('')}
+    <tr><td class="r"><b>Umidade Média (%)</b></td><td class="c" colspan="3"><b>${nf(N.w, 1)}</b></td></tr></table>`;
+  const caixa = (t, v, u) => `<div class="cx"><div class="ct">${t}</div><div class="cv"><b>${v}</b> <span>${u}</span></div></div>`;
+  const corpo = `${cabecalhoSl()}
+    ${barraSl(fr ? 'NBR 7185/2016 · DNER-ME 092/94' : 'NBR 9813/2016', fr ? 'MASSA ESP. IN SITU — FRASCO' : 'MASSA ESP. IN SITU — CILINDRO', m.registro, I.data)}
+    <table class="g"><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup>
+      <tr class="tt"><td colspan="4">MASSA ESPECÍFICA APARENTE IN SITU — ${fr ? 'FRASCO DE AREIA (volume do furo)' : 'CILINDRO DE CRAVAÇÃO'}</td></tr>
+      ${L('Profundidade / posição', esc(I.prof))}${L('Operador', esc(I.operador))}
+      ${ent.map(([a, b]) => L(a, b)).join('')}
+      <tr><td class="r"><b>Massa Esp. Aparente Úmida (g/cm³)</b></td><td class="c" colspan="3"><b>${nf(N.gh, 3)}</b></td></tr></table>
+    ${caps}
+    <div class="sl-grafcomp"><div class="gx" style="display:flex;gap:4mm;width:100%">
+      ${caixa('Massa Esp. Aparente Seca in situ', nf(N.gs, 3), 'g/cm³')}${caixa('Umidade in situ', nf(N.w, 1), '%')}
+      ${caixa('Grau de Compactação', ehNumero(N.gc) ? nf(N.gc, 1) : '—', '%')}${caixa('Desvio da umidade ótima', ehNumero(N.dw) ? (N.dw >= 0 ? '+' : '') + nf(N.dw, 1) : '—', 'p.p.')}</div></div>
+    ${I.obs ? `<table class="g"><tr><td class="r" style="width:34%">Observações</td><td>${esc(I.obs)}</td></tr></table>` : ''}
+    ${ehNumero(N.gc) ? `<p style="font-size:7.5pt;margin:1.5mm 0">Grau de compactação em relação ao peso específico seco máximo de ${nf(r.comp.dmax, 3)} g/cm³ e umidade ótima de ${nf(r.comp.hot, 1)} % (ensaio de compactação deste registro).</p>` : ''}
+    ${rodapeSl('03/03')}`;
+  return [`<div class="folha nsl">${corpo}</div>`];
 }
 
 const somaMinSl = (hhmm, n) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '')); if (!m) return ''; const t = (+m[1] * 60 + +m[2] + n) % 1440;
@@ -14515,6 +14685,36 @@ const FICHAS_SLAB = [
         tipos: ['num', 'num', 'texto', 'texto', 'texto', 'texto'],
         linhas: [0, 1, 2, 3, 4, 5, 6, 7].map(k => [`Camada ${k + 1}`, c => `bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`, 'num', '',
           c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`)]) },
+    ] },
+  // densidade in situ do furo: a ficha muda com o método escolhido na aba (cilindro de cravação ou frasco de areia)
+  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8', titulo: 'Massa específica in situ — cilindro de cravação (NBR 9813)', cabs: CAB_SL, repeteCab: ['laboratorista'],
+    quando: () => !(estado.slab && estado.slab.insitu && estado.slab.insitu.metodo === 'frasco'),
+    nota: 'Cilindro de cravação: peso e volume costumam estar gravados no próprio cilindro. Se a ficha trouxer só diâmetro e altura, ponha nesses campos.',
+    blocos: [
+      { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'insData', _sl('insitu.data'), 'data'),
+        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto'), fAt('Operador', 'insOper', _sl('insitu.operador'), 'texto', 2)] },
+      { tipo: 'campos', titulo: 'Cilindro de cravação', campos: [fAt('Cilindro nº', 'insCil', _sl('insitu.cil.numero'), 'texto'),
+        fAt('Peso do cilindro (g)', 'insCilPeso', _sl('insitu.cil.peso')), fAt('Volume do cilindro (cm³)', 'insCilVol', _sl('insitu.cil.volume')),
+        fAt('Diâmetro interno (cm)', 'insCilD', _sl('insitu.cil.diametro')), fAt('Altura (cm)', 'insCilH', _sl('insitu.cil.altura')),
+        fAt('Cilindro + solo úmido (g)', 'insCilSolo', _sl('insitu.cil.cilSolo'))] },
+      { tipo: 'grade', titulo: 'Umidade — cápsulas', colunas: ['Cápsula 1', 'Cápsula 2', 'Cápsula 3'], idx: [0, 1, 2], linhas: [
+        linSl('Cápsula nº', i => `insitu.umid.${i}.capsula`, 'texto'), linSl('Cápsula + solo úmido (g)', i => `insitu.umid.${i}.umido`),
+        linSl('Cápsula + solo seco (g)', i => `insitu.umid.${i}.seco`)] },
+      { tipo: 'campos', titulo: 'Observações', campos: [fAt('Observações', 'insObs', _sl('insitu.obs'), 'texto', 3)] },
+    ] },
+  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8A', titulo: 'Massa específica in situ — frasco de areia (NBR 7185)', cabs: CAB_SL, repeteCab: ['laboratorista'],
+    quando: () => !!(estado.slab && estado.slab.insitu && estado.slab.insitu.metodo === 'frasco'),
+    blocos: [
+      { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'insData', _sl('insitu.data'), 'data'),
+        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto'), fAt('Operador', 'insOper', _sl('insitu.operador'), 'texto', 2)] },
+      { tipo: 'campos', titulo: 'Frasco de areia', campos: [fAt('Frasco nº', 'insFr', _sl('insitu.fr.numero'), 'texto'),
+        fAt('Densidade da areia (g/cm³)', 'insFrDens', _sl('insitu.fr.densAreia')), fAt('Areia no cone (g)', 'insFrCone', _sl('insitu.fr.cone')),
+        fAt('Frasco + areia antes (g)', 'insFrAntes', _sl('insitu.fr.antes')), fAt('Frasco + areia depois (g)', 'insFrDepois', _sl('insitu.fr.depois')),
+        fAt('Solo úmido + recipiente (g)', 'insFrSolo', _sl('insitu.fr.soloTara')), fAt('Recipiente (g)', 'insFrTara', _sl('insitu.fr.tara'))] },
+      { tipo: 'grade', titulo: 'Umidade — cápsulas', colunas: ['Cápsula 1', 'Cápsula 2', 'Cápsula 3'], idx: [0, 1, 2], linhas: [
+        linSl('Cápsula nº', i => `insitu.umid.${i}.capsula`, 'texto'), linSl('Cápsula + solo úmido (g)', i => `insitu.umid.${i}.umido`),
+        linSl('Cápsula + solo seco (g)', i => `insitu.umid.${i}.seco`)] },
+      { tipo: 'campos', titulo: 'Observações', campos: [fAt('Observações', 'insObs', _sl('insitu.obs'), 'texto', 3)] },
     ] },
   { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, repete: ['parcial'], repeteCab: ['laboratorista'], titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
     blocos: [
@@ -14624,6 +14824,7 @@ function resumoSlab(c) {
     nomeSolo: q.descricao || '',
     plano: (estado.slab.plano || {}).codigo || '', st: (estado.slab.plano || {}).st || '',
     partes: partesSlab(q),
+    insitu: q.insitu && ehNumero(q.insitu.gs) ? { metodo: q.insitu.metodo, gh: q.insitu.gh, w: q.insitu.w, gs: q.insitu.gs, gc: q.insitu.gc ?? null } : null,
   };
 }
 
@@ -14636,6 +14837,7 @@ function partesSlab(q) {
     lim: q.lim.np || ehNumero(q.lim.LL),
     comp: ehNumero(q.comp.dmax),
     isc: ehNumero(q.cbr.cbr) || s.cbr.pontos.some(p => (p.pen || []).slice(1).some(ehNumero)),
+    insitu: !!(q.insitu && ehNumero(q.insitu.gs)),
   };
 }
 
@@ -19830,7 +20032,7 @@ const FOLHAS_POR_MODO = {
   /* na ordem do laudo da planilha de origem: 11 folhas */
   csond:          ['csProctor', 'csIsc', 'csCarac', 'csMct', 'csSed', 'csMr'],
   /* Ensaio de solos de laboratório: as 2 folhas da aba ST-01 */
-  slab:           ['slabBol', 'slab1', 'slab2'],     // o boletim de sondagem (se preenchido) vem na frente
+  slab:           ['slabBol', 'slab1', 'slab2', 'slabIn'],     // o boletim de sondagem (se preenchido) vem na frente; o in situ (se lançado) no fim
   completo:       ['compactacao', 'granulometria', 'equivalente', 'limites',
                    'cbr', 'insitu', 'sedimentacao', 'resumo'],
   /* CAUQ: os sete ensaios cabem numa folha só, como na planilha de origem */
@@ -20602,6 +20804,7 @@ const CONSTRUTORES = {
   slabBol:       folhaSlabBol,
   slab1:         folhaSlab1,
   slab2:         folhaSlab2,
+  slabIn:        folhaSlabInsitu,
   sondagem:      folhaSondagem,
   m031:          folhaM031,
   m031Teor:      folhaM031Teor,
@@ -25238,8 +25441,10 @@ function situacaoDosEnsaios(p, e) {
   const out = {};
   TIPOS_PLANO.forEach(({ k, manual }) => {
     if (!(p.ensaios || {})[k]) { out[k] = null; return; }
-    const feito = manual ? !!feitos[k] : (k === 'isc' ? partes.isc && partes.lim : !!partes[k]);
-    out[k] = !feito ? 'pendente' : (manual || sit === 'aprovado') ? 'aprovado' : 'lancado';
+    // in situ lançado na aba In situ do ensaio conta como o ensaio; a marcação à mão continua valendo (feito por fora)
+    const peloEnsaio = k === 'insitu' && !!partes.insitu;
+    const feito = peloEnsaio || (manual ? !!feitos[k] : (k === 'isc' ? partes.isc && partes.lim : !!partes[k]));
+    out[k] = !feito ? 'pendente' : peloEnsaio ? (sit === 'aprovado' ? 'aprovado' : 'lancado') : (manual || sit === 'aprovado') ? 'aprovado' : 'lancado';
   });
   return out;
 }
