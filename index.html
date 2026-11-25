@@ -25061,12 +25061,12 @@ function tipoDaColuna(txt) {
  * linhas de trecho (texto sem ST) dividem os pontos.
  */
 function planoDaGrade(linhas) {
-  const L = linhas.map(l => l || []);
+  const L = Array.from(linhas, l => Array.from(l || [], v => v ?? null));   // linhas e células vazias no meio (xlsx de outros programas)
   const iCab = L.findIndex(l => l.some(v => /IDENTIFICA/.test(normPl(v)) || /^ST$/.test(normPl(v))));
   if (iCab < 0) return null;
   const cab = L[iCab], sub = L.slice(iCab + 1, iCab + 3);
   const acha = re => cab.findIndex(v => re.test(normPl(v)));
-  const cSt = acha(/IDENTIFICA|^ST$/), cLoc = acha(/LOCALIZA/), cKm = acha(/^KM/), cProf = acha(/PROF/);
+  const cSt = acha(/IDENTIFICA|^ST$/), cLoc = acha(/LOCALIZA/), cKm = acha(/^KM/), cProf = acha(/PROF/), cObs = acha(/OBSERVA/);
   let cN = -1, cE = -1;
   sub.forEach(l => l.forEach((v, c) => { if (/^NORTE|^N$/.test(normPl(v))) cN = c; if (/^ESTE|^LESTE|^E$/.test(normPl(v))) cE = c; }));
   if (cN < 0) { const cc = acha(/COORDENADA/); if (cc >= 0) { cN = cc; cE = cc + 1; } }
@@ -25101,7 +25101,7 @@ function planoDaGrade(linhas) {
     const ens = {}; colunas.forEach(({ c, k }) => { if (String(l[c] ?? '').trim()) ens[k] = true; });
     pontos.push({ st: st.toUpperCase(), trecho, localizacao: cLoc >= 0 ? String(l[cLoc] ?? '').trim() : '',
       norte: cN >= 0 ? numPl(l[cN]) : null, este: cE >= 0 ? numPl(l[cE]) : null, km: Number.isFinite(km) ? +km.toFixed(3) : null,
-      prof: cProf >= 0 ? numPl(l[cProf]) : null, ensaios: ens });
+      prof: cProf >= 0 ? numPl(l[cProf]) : null, ensaios: ens, ...(cObs >= 0 && String(l[cObs] ?? '').trim() ? { obs: String(l[cObs]).trim() } : {}) });
   }
   if (!pontos.length) return null;
   const tipos = [...new Set(colunas.map(c => c.k))].filter(k => pontos.some(p => p.ensaios[k]));
@@ -25215,7 +25215,7 @@ function salvarPlanoImportado(lido, extra) {
     rodovia: extra.rodovia || lido.rodovia, estudo: extra.estudo, energia: extra.energia || lido.energia, fuso: extra.fuso || 20, hemisferio: 'S',
     colunas: lido.colunas, ativo: true, criado_por: quemSou(), criado_em: agora, atualizado_em: agora };
   const pontos = lido.pontos.map((p, i) => ({ id: novoId(), plano_id: id, ordem: i + 1, ...p, feitos: {}, sondagem: null, registro: null,
-    registrado_em: null, registrado_por: null, enviado_em: null, enviado_por: null, obs: null, atualizado_em: agora, atualizado_por: quemSou() }));
+    registrado_em: null, registrado_por: null, enviado_em: null, enviado_por: null, obs: p.obs || null, atualizado_em: agora, atualizado_por: quemSou() }));
   PLANOS.planos.push(plano); PLANOS.pontos[id] = pontos;
   PLANOS.pendentes.push({ tipo: 'plano', id });
   PLANOS.aberto = id;
@@ -25318,6 +25318,8 @@ function preencherComPonto(p, pl) {
       energia: normPl(pl.energia || estado.slab.ident.energia).startsWith('INTERMEDI') ? 'INTERMEDIÁRIA' : (pl.energia || estado.slab.ident.energia) });
     if (p.sondagem && p.sondagem.data && !estado.slab.ident.dataComp) estado.slab.ident.dataColeta = p.sondagem.data;
     estado.slab.plano = { id: pl.id, codigo: pl.codigo, pontoId: p.id, st: p.st, ensaios: { ...(p.ensaios || {}) } };
+    // furo SP-…: o boletim do ensaio já abre como SPT (NBR 6484)
+    if (typeof furoSpt === 'function' && furoSpt(p) && estado.slab.bol) estado.slab.bol.tipo = 'spt';
     if (typeof puxarCampoParaBol === 'function') puxarCampoParaBol(p);      // o que o campo marcou vai para a aba Boletim
   }
 }
@@ -25935,12 +25937,12 @@ function salvarCampo(p, mudancas) {
 /* ------------------------------------------------------------
    GPS
    ------------------------------------------------------------ */
-function posicaoAgora(tempo = 15000) {
+function posicaoAgora(tempo = 15000, idade = 30000) {
   return new Promise(ok => {
     if (!navigator.geolocation) return ok(null);
     navigator.geolocation.getCurrentPosition(
       pos => ok({ lat: pos.coords.latitude, lon: pos.coords.longitude, prec: pos.coords.accuracy }),
-      () => ok(null), { enableHighAccuracy: true, timeout: tempo, maximumAge: 30000 });
+      () => ok(null), { enableHighAccuracy: true, timeout: tempo, maximumAge: idade });
   });
 }
 function marcaDeCampo(p, pos) {
@@ -26068,7 +26070,8 @@ function htmlCampoDoPonto(p, pl) {
 
 /** Marca o início ou o fim do furo com hora e GPS (início: pelo QR code da etiqueta; fim: botão Finalizar furo). */
 async function marcarFuro(p, k) {
-  const pos = await posicaoAgora();
+  // posição nova (não a guardada de um minuto atrás, que pode ser a do furo anterior)
+  const pos = await posicaoAgora(20000, 0);
   const m = marcaDeCampo(p, pos), so = sondagemDe(p);
   const extra = k === 'fim' && !so.data ? { data: dataLocal(new Date(m.em)), lat: m.lat, lon: m.lon, distancia: m.dist } : {};
   if (k === 'fim' && !so.equipe) extra.equipe = String(quemSou() || '').toUpperCase().trim();
@@ -26150,6 +26153,12 @@ function ligarMapaPlano(pl) {
   const div = $('plMapa');
   if (MAPA_PLANO) { try { MAPA_VISTA = { c: MAPA_PLANO.getCenter(), z: MAPA_PLANO.getZoom() }; MAPA_PLANO.stop(); MAPA_PLANO.remove(); } catch (e) {} MAPA_PLANO = null; }
   if (!div || !temMapa()) return;
+  // o mapa é trocado quando a tela remonta: um redesenho que já estava marcado não roda no mapa velho
+  if (L.Canvas && !L.Canvas.prototype.__protegido) {
+    const r = L.Canvas.prototype._redraw;
+    L.Canvas.prototype._redraw = function () { if (this._ctx) return r.apply(this, arguments); };
+    L.Canvas.prototype.__protegido = true;
+  }
   const pts = pontosFiltrados(pl).map(p => ({ p, g: geoDoPonto(p) })).filter(x => x.g);
   const mapa = L.map(div, { zoomControl: true, attributionControl: true, preferCanvas: true, fadeAnimation: false });
   MAPA_PLANO = mapa;
@@ -26356,8 +26365,11 @@ function bolDoPonto(p) {
   const so = sondagemDe(p);
   return { data: so.data || '', sondador: so.equipe || '', prof: ehNumero(so.prof) ? so.prof : null, relevo: so.relevo || '', vegetacao: so.vegetacao || '',
     terreno: so.terreno || (so.naSeco ? 'seco' : ''), na: ehNumero(so.na) ? so.na : null, naSeco: so.naSeco ? '1' : '', parada: so.parada || '',
-    cota: ehNumero(so.cota) ? so.cota : null, outras: '', obs: so.obs || '', camadas: copiaCampo(so.camadas || []) };
+    cota: ehNumero(so.cota) ? so.cota : null, outras: '', obs: so.obs || '', camadas: copiaCampo(so.camadas || []),
+    ...(furoSpt(p) ? { tipo: 'spt' } : {}) };
 }
+/** Furo de sondagem à percussão (SPT): o código do ponto começa com SP (SP-01, SP-001…). */
+const furoSpt = p => /^SP/i.test(String((p && p.st) || ''));
 /** Junta: o primeiro manda, o segundo completa o que estiver vazio. */
 function juntarBol(manda, completa) {
   const r = vazioBol();
