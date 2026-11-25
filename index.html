@@ -791,6 +791,8 @@ details.pl-etapa > summary.pl-etapa-cab{cursor:pointer; list-style:none; margin-
 details.pl-etapa > summary.pl-etapa-cab::-webkit-details-marker{display:none;}
 details.pl-etapa > summary.pl-etapa-cab::after{content:'▸'; color:var(--text-2); font-size:13px;}
 details.pl-etapa[open] > summary.pl-etapa-cab{margin-bottom:8px;} details.pl-etapa[open] > summary.pl-etapa-cab::after{content:'▾';}
+.pl-arquivados > summary{cursor:pointer; display:flex; gap:8px; align-items:center;}
+.pl-arq{display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:space-between; align-items:center; padding:10px 0; border-top:1px solid var(--border);}
 .pl-fotos-bloco{border-top:1px solid var(--border); padding:10px 0 4px; margin-top:4px;}
 .pl-sub{display:flex; align-items:baseline; gap:8px; font-size:13px; margin:0 0 8px;} .pl-sub .hint{margin-left:auto; font-size:12px; font-weight:400;}
 .pl-passos{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;}
@@ -22007,8 +22009,15 @@ function montarHistorico() {
   const aprovados = historicoAprovado();
   $('histQtd').textContent = aprovados.length
     ? `${aprovados.length} ${aprovados.length === 1 ? 'ensaio aprovado' : 'ensaios aprovados'}` : 'vazio';
-  const fora = historico.filter(e => !(typeof ehCadastro === 'function' && ehCadastro(e))).length - aprovados.length, fa = $('histForaAprov');
-  if (fa) fa.innerHTML = fora ? `<div class="aviso agenda"><span class="ico">◷</span><span>${fora} ensaio(s) em andamento ou aguardando aprovação — estão na aba <b>Aprovar</b>.</span></div>` : '';
+  const oculto = e => typeof ensaioOculto === 'function' && ensaioOculto(e);
+  const fora = historico.filter(e => !(typeof ehCadastro === 'function' && ehCadastro(e)) && !oculto(e)).length - aprovados.length, fa = $('histForaAprov');
+  // ensaios de planos arquivados ou apagados: fora da lista; um toque mostra de novo
+  const nOcultos = typeof ensaioOculto === 'function' ? (() => { const m = MOSTRAR_ARQUIVADOS; MOSTRAR_ARQUIVADOS = false;
+    const n = historico.filter(e => !(typeof ehCadastro === 'function' && ehCadastro(e)) && ensaioOculto(e)).length; MOSTRAR_ARQUIVADOS = m; return n; })() : 0;
+  if (fa) fa.innerHTML = (fora ? `<div class="aviso agenda"><span class="ico">◷</span><span>${fora} ensaio(s) em andamento ou aguardando aprovação — estão na aba <b>Aprovar</b>.</span></div>` : '')
+    + (nOcultos ? `<div class="aviso"><span class="ico">📦</span><span>${nOcultos} ensaio(s) de planos arquivados ou apagados ${MOSTRAR_ARQUIVADOS ? 'aparecendo na lista' : 'escondidos'}.</span>
+        <button class="btn ghost sm" type="button" id="histMostrarArq">${MOSTRAR_ARQUIVADOS ? 'Esconder de novo' : 'Mostrar'}</button></div>` : '');
+  const bm = $('histMostrarArq'); if (bm) bm.addEventListener('click', () => { MOSTRAR_ARQUIVADOS = !MOSTRAR_ARQUIVADOS; montarHistorico(); if (typeof montarAprovacao === 'function') montarAprovacao(); });
 
   // ensaios salvos antes das famílias existirem são de solos
   const porFamilia = {};
@@ -22388,7 +22397,7 @@ const SITUACOES = { andamento: 'Em andamento', aguardando: 'Aguardando aprovaç�
 const situacaoDe = e => (e && e.situacao) || 'aprovado';
 /* Projeto de CAUQ é cadastro (Dados gerais), não ensaio: viaja no histórico para chegar aos aparelhos, mas não entra nas listas */
 const ehCadastro = e => ((e && e.resumo) || {}).modo === 'projcauq';
-const historicoAprovado = () => historico.filter(e => !ehCadastro(e) && situacaoDe(e) === 'aprovado');
+const historicoAprovado = () => historico.filter(e => !ehCadastro(e) && situacaoDe(e) === 'aprovado' && !(typeof ensaioOculto === 'function' && ensaioOculto(e)));
 const CAMPOS_APROVACAO = ['situacao', 'enviadoEm', 'enviadoPor', 'aprovadoEm', 'aprovadoPor', 'devolucao'];
 
 /* ---------- quem é o analista neste aparelho ---------- */
@@ -22498,8 +22507,9 @@ function cartaoAprovacao(e, analista) {
 
 function montarAprovacao() {
   const alvo = $('aprovarConteudo');
-  const aguardando = historico.filter(e => !ehCadastro(e) && situacaoDe(e) === 'aguardando');
-  const andamento = historico.filter(e => !ehCadastro(e) && ['andamento', 'devolvido'].includes(situacaoDe(e)));
+  const oculto = e => typeof ensaioOculto === 'function' && ensaioOculto(e);   // plano arquivado/apagado
+  const aguardando = historico.filter(e => !ehCadastro(e) && situacaoDe(e) === 'aguardando' && !oculto(e));
+  const andamento = historico.filter(e => !ehCadastro(e) && ['andamento', 'devolvido'].includes(situacaoDe(e)) && !oculto(e));
   // contagem na barra: o que espera aprovação
   document.querySelectorAll('nav button[data-aba="aprovar"] .conta-aprov').forEach(c => {
     c.textContent = aguardando.length ? String(aguardando.length) : ''; c.hidden = !aguardando.length; });
@@ -25797,6 +25807,7 @@ async function sincronizarPlanosBanco() {
   const pts = {}; PLANOS.planos.forEach(p => { pts[p.id] = novos[p.id] || PLANOS.pontos[p.id] || []; });
   const mudou = JSON.stringify([antesPl, PLANOS.pontos]) !== JSON.stringify([PLANOS.planos, pts]);
   PLANOS.pontos = pts;
+  PLANOS.carregado = true;               // já recebeu os planos do banco: ensaio de plano que não existe mais fica escondido
   gravarPlanos();
   setTimeout(() => { migrarRegistrosDoPlano().catch(() => 0); }, 0);
   // a cada 15 s: só remonta a tela se algo mudou (não atrapalha quem está digitando no painel)
@@ -25819,10 +25830,12 @@ function montarPlanos() {
   const alvo = $('planoConteudo');
   if (!alvo) return;
   if (!migrandoRegistros) migrarRegistrosDoPlano().then(n => { if (n) montarPlanos(); }).catch(() => 0);
-  const pl = planoPorId(PLANOS.aberto) || PLANOS.planos[0] || null;
-  if (pl) PLANOS.aberto = pl.id;
+  // plano arquivado sai da lista (fica em "Planos arquivados", para o gestor)
+  const visiveis = typeof planosVisiveis === 'function' ? planosVisiveis() : PLANOS.planos;
+  const pl = visiveis.find(p => p.id === PLANOS.aberto) || visiveis[0] || null;
+  PLANOS.aberto = pl ? pl.id : null;
   const gestor = ehGestorPlano();
-  const cards = PLANOS.planos.map(p => {
+  const cards = visiveis.map(p => {
     const r = resumoDoPlano(p), pct = r.n ? Math.round(100 * r.aprovados / r.n) : 0;
     return `<button type="button" class="modo${pl && p.id === pl.id ? ' sel' : ''}" data-plano="${p.id}"><span class="marca-radio"></span><span>
       <span class="nome">Plano ${atr(p.codigo)}</span><span class="desc">${atr(p.nome || '')}${p.cliente ? ' · ' + atr(p.cliente) : ''}</span>
@@ -25831,10 +25844,10 @@ function montarPlanos() {
   const imp = FILTRO_PLANO.importado;
   alvo.innerHTML = `
     <div class="card">
-      <h2>Planos de sondagem <span class="tag">${PLANOS.planos.length || 'nenhum'}</span></h2>
-      ${PLANOS.planos.length ? `<div class="modos">${cards}</div>` : '<p class="hint">Nenhum plano ainda. Importe a planilha que a contratante enviou.</p>'}
+      <h2>Planos de sondagem <span class="tag">${visiveis.length || 'nenhum'}</span></h2>
+      ${visiveis.length ? `<div class="modos">${cards}</div>` : '<p class="hint">Nenhum plano ainda. Importe a planilha que a contratante enviou.</p>'}
       <div class="rasc-botoes" style="margin-top:12px">
-        <label class="btn${PLANOS.planos.length ? ' ghost' : ''}"><input type="file" accept=".xlsx" id="plArquivo" hidden>Importar plano (planilha .xlsx)</label>
+        <label class="btn${visiveis.length ? ' ghost' : ''}"><input type="file" accept=".xlsx" id="plArquivo" hidden>Importar plano (planilha .xlsx)</label>
         ${pl ? `<button class="btn ghost" type="button" id="plRelatorio">Relatório de andamento (PDF)</button>
         <button class="btn ghost" type="button" id="plCsv">Planilha de andamento (CSV)</button>
         ${htmlExportacoesPlano()}` : ''}
@@ -25843,6 +25856,8 @@ function montarPlanos() {
     </div>
     ${imp ? cartaoImportacao(imp) : ''}
     ${pl ? painelDoPlano(pl, gestor) : ''}
+    ${pl && gestor && typeof htmlFinalizarPlano === 'function' ? htmlFinalizarPlano(pl) : ''}
+    ${gestor && typeof htmlPlanosArquivados === 'function' ? htmlPlanosArquivados() : ''}
     <p class="hint" style="margin:4px 4px 14px">Registro das amostras: <b>${SIGLA_REGISTRO()}-código do plano-ST</b> (ex.: ${SIGLA_REGISTRO()}-1139-ST001) — único em todos os planos.</p>`;
   ligarPlanos();
 }
@@ -26046,7 +26061,7 @@ function ligarPlanos() {
   });
   on('plApagar', 'click', () => {
     const pl = planoPorId(PLANOS.aberto); if (!pl) return;
-    if (!confirm(`Apagar o plano ${pl.codigo} e os ${pontosDo(pl.id).length} pontos dele? Os ensaios salvos continuam.`)) return;
+    if (!confirm(`Apagar o plano ${pl.codigo} e os ${pontosDo(pl.id).length} pontos dele? Ele some do app em todos os aparelhos; os ensaios dele ficam guardados no banco, escondidos (Histórico → Mostrar).`)) return;
     PLANOS.planos = PLANOS.planos.filter(x => x.id !== pl.id); delete PLANOS.pontos[pl.id];
     PLANOS.pendentes = PLANOS.pendentes.filter(x => x.id !== pl.id); PLANOS.pendentes.push({ tipo: 'apagar', id: pl.id });
     PLANOS.aberto = null; gravarPlanos(); montarPlanos();
@@ -26063,7 +26078,8 @@ function ligarPlanos() {
   on('plRelatorio', 'click', () => abrirRelatorioPlano(planoPorId(PLANOS.aberto)));
   on('plCsv', 'click', () => baixarCsvPlano(planoPorId(PLANOS.aberto)));
   const plAberto = planoPorId(PLANOS.aberto);
-  if (plAberto) { ligarExportacoesPlano(plAberto); ligarMapaPlano(plAberto); }
+  if (plAberto) { ligarExportacoesPlano(plAberto); ligarMapaPlano(plAberto); if (typeof ligarArquivoPlano === 'function') ligarArquivoPlano(plAberto); }
+  if (typeof ligarPlanosArquivados === 'function') ligarPlanosArquivados();
 
 }
 
@@ -26972,7 +26988,7 @@ function folhaSlabBol(pacote) {
   return [`<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d) : htmlFolhaBoletim(d))];
 }
 
-async function htmlBoletins(pl, pontos) {
+async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
   const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
   const M = (typeof MARCA === 'object' && MARCA) || {}, S = M.slab || {};
   const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
@@ -26980,7 +26996,7 @@ async function htmlBoletins(pl, pontos) {
   for (const p of pontos) {
     const d = dadosBoletimDoPonto(p, pl);
     const fotos = [];
-    for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
+    if (!semFotos) for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
     folhas.push(d.bol.tipo === 'spt' ? htmlFolhaSpt(d, fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(d, fotos.length ? '1/2' : 'Única'));
     if (fotos.length) folhas.push(`<div class="folha nbol fotos-folha">
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
@@ -27369,6 +27385,9 @@ async function abrirFuroDoQr() {
   let id = null; try { id = sessionStorage.getItem(CHAVE_FURO_QR); } catch (e) {}
   if (!id || FURO_QR_RODANDO || (typeof precisaEntrar === 'function' && precisaEntrar())) return false;
   const p = pontoPorId(id); if (!p) return false;       // ainda não chegou do banco: tenta de novo depois da sincronização
+  if (typeof planoArquivado === 'function' && planoArquivado(planoPorId(p.plano_id))) {
+    try { sessionStorage.removeItem(CHAVE_FURO_QR); } catch (e) {}
+    irParaAba('planos'); avisoPlano('plAviso', 'erro', `O ${atr(p.st)} é de um plano <b>arquivado</b> — o furo não foi iniciado.`); return false; }
   FURO_QR_RODANDO = true;
   try {
     try { sessionStorage.removeItem(CHAVE_FURO_QR); } catch (e) {}
@@ -27417,6 +27436,303 @@ function ligarExportacoesPlano(pl) {
       avisoPlano('plAviso', 'ok', `${lista.length} etiqueta(s) de campo. Na janela, escolha <b>Salvar como PDF</b> e imprima para os operadores.`);
     });
   });
+}
+/* ============================================================
+   ARQUIVO DO PLANO (25/11/2026)
+   Plano finalizado — tudo enviado à contratante: o gestor toca em
+   "Finalizar e arquivar". O app monta a cópia completa do plano
+   (relatório de andamento, boletins, laudos, planilha, KML, AGS 4,
+   fotos do campo, rascunhos e os dados para restaurar), guarda no
+   armazenamento privado "arquivos" do banco (script 17) e esconde o
+   plano e os ensaios dele das abas Planos, Histórico e Aprovar.
+   Desarquivar devolve tudo à tela; nada é apagado.
+   Plano apagado: some do app, e os ensaios dele ficam escondidos
+   como os de um plano arquivado (continuam no banco).
+   ============================================================ */
+
+/* ---------- ZIP (sem compressão — fotos e PDFs já vêm comprimidos) ---------- */
+const TABELA_CRC = (() => { const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = TABELA_CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+const bytesDeTexto = t => new TextEncoder().encode(t);
+function bytesDeBase64(b64) { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+
+/** [{ nome, bytes }] → Blob .zip (nomes em UTF-8, data de hoje). */
+function montarZip(arquivos) {
+  const d = new Date(), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(), hr = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const partes = [], central = [];
+  let pos = 0;
+  for (const a of arquivos) {
+    const nome = bytesDeTexto(a.nome), dados = a.bytes, crc = crc32(dados);
+    const loc = new DataView(new ArrayBuffer(30));
+    loc.setUint32(0, 0x04034b50, true); loc.setUint16(4, 20, true); loc.setUint16(6, 0x0800, true); loc.setUint16(8, 0, true);
+    loc.setUint16(10, hr, true); loc.setUint16(12, dt, true); loc.setUint32(14, crc, true);
+    loc.setUint32(18, dados.length, true); loc.setUint32(22, dados.length, true); loc.setUint16(26, nome.length, true); loc.setUint16(28, 0, true);
+    partes.push(new Uint8Array(loc.buffer), nome, dados);
+    const cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true); cen.setUint16(10, 0, true);
+    cen.setUint16(12, hr, true); cen.setUint16(14, dt, true); cen.setUint32(16, crc, true); cen.setUint32(20, dados.length, true); cen.setUint32(24, dados.length, true);
+    cen.setUint16(28, nome.length, true); cen.setUint32(42, pos, true);
+    central.push(new Uint8Array(cen.buffer), nome);
+    pos += 30 + nome.length + dados.length;
+  }
+  const tamCentral = central.reduce((s, x) => s + x.length, 0);
+  const fim = new DataView(new ArrayBuffer(22));
+  fim.setUint32(0, 0x06054b50, true); fim.setUint16(8, arquivos.length, true); fim.setUint16(10, arquivos.length, true);
+  fim.setUint32(12, tamCentral, true); fim.setUint32(16, pos, true);
+  return new Blob([...partes, ...central, new Uint8Array(fim.buffer)], { type: 'application/zip' });
+}
+
+/* ---------- o que fica escondido ---------- */
+let MOSTRAR_ARQUIVADOS = false;
+const planoArquivado = pl => !!(pl && pl.arquivado_em);
+const planosVisiveis = () => PLANOS.planos.filter(p => !planoArquivado(p));
+/** Ensaio de plano arquivado ou apagado: fora das listas (o botão do Histórico mostra de novo). */
+function ensaioOculto(e) {
+  if (MOSTRAR_ARQUIVADOS || typeof usaPlanos !== 'function' || !usaPlanos()) return false;
+  const cod = e && e.resumo && e.resumo.plano;
+  if (!cod) return false;
+  if (!PLANOS.carregado && !PLANOS.planos.length) return false;   // aparelho que ainda não recebeu os planos
+  const pl = PLANOS.planos.find(p => String(p.codigo) === String(cod));
+  return !pl || planoArquivado(pl);
+}
+
+/* ---------- a cópia ---------- */
+const limpaNome = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80);
+const LIMITE_PARTE = 45 * 1024 * 1024;     // cada .zip até ~45 MB (o banco aceita 50 MB por arquivo)
+
+/** CSS das folhas do app, para o laudo abrir sozinho no navegador e imprimir igual. */
+function cssDasFolhas() {
+  return [...document.querySelectorAll('style')].map(s => s.textContent).join('\n')
+    + `\n#folhaImpressao{display:block!important;position:static!important;left:auto!important} body{background:#fff!important;margin:0}
+      @media screen{ body{padding:10px} #folhaImpressao .folha{margin:0 auto 12px;box-shadow:0 0 0 1px #ccc} }`;
+}
+
+/** Os laudos de todos os ensaios do plano numa página só (o mesmo desenho do PDF do app). */
+function htmlLaudosDoPlano(pl, pontos) {
+  const ensaios = pontos.map(p => ({ p, e: ensaioDoPonto(p, pl) })).filter(x => x.e);
+  if (!ensaios.length) return null;
+  const naTela = fotografarEnsaio(), partes = [];
+  try {
+    if (typeof FOLHAS_SO !== 'undefined') FOLHAS_SO = null;
+    if (typeof SECOES_SO !== 'undefined') SECOES_SO = null;
+    ensaios.forEach(({ e }) => { aplicarEnsaio(e.foto); encherFolhas($('folhaImpressao')); partes.push($('folhaImpressao').innerHTML); });
+  } finally { aplicarEnsaio(naTela); }
+  return { n: ensaios.length, html: `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Laudos — plano ${atr(pl.codigo)}</title>
+    <style>${cssDasFolhas()}</style></head><body><div id="folhaImpressao">${partes.join('')}</div></body></html>` };
+}
+
+async function bytesDoAnexo(a) {
+  let g = null;
+  try { g = await bancoAnexo('ler', a.id); } catch (e) {}
+  if (!g && a.caminho && typeof bancoLigado === 'function' && bancoLigado()) { try { g = await baixarAnexoBanco(a); } catch (e) {} }
+  return g ? { bytes: bytesDeBase64(g.dados), ext: g.tipo === 'application/pdf' ? 'pdf' : g.tipo === 'image/png' ? 'png' : 'jpg' } : null;
+}
+
+/** Monta todos os arquivos da cópia do plano. `aviso(texto)` mostra o andamento. */
+async function arquivosDoPlano(pl, aviso = () => {}) {
+  const pts = pontosDo(pl.id), raiz = limpaNome(`PLANO ${pl.codigo} - ${pl.nome || ''}`);
+  const docs = [], fotos = [], faltou = [];
+  const txt = (nome, t) => docs.push({ nome: `${raiz}/${nome}`, bytes: bytesDeTexto(t) });
+  aviso('Montando o relatório de andamento e as planilhas…');
+  txt('1 RELATORIO DE ANDAMENTO.html', htmlRelatorioPlano(pl));
+  txt('4 PLANILHA DE ANDAMENTO.csv', '﻿' + csvPlano(pl));
+  txt('5 GOOGLE EARTH.kml', kmlPlano(pl));
+  txt('6 DADOS DIGITAIS AGS4.ags', agsPlano(pl));
+  aviso('Montando os boletins de sondagem…');
+  const sondados = pts.filter(p => sondagemDe(p).data);
+  if (sondados.length) txt('2 BOLETINS DE SONDAGEM.html', await htmlBoletins(pl, sondados, { semFotos: true }));
+  aviso(`Montando os laudos (${pts.filter(p => ensaioDoPonto(p, pl)).length} ensaios)…`);
+  const laudos = htmlLaudosDoPlano(pl, pts);
+  if (laudos) txt('3 LAUDOS DOS ENSAIOS.html', laudos.html);
+  // fotos do campo e rascunhos anexados aos ensaios
+  let i = 0;
+  for (const p of pts) {
+    i++;
+    if (i % 10 === 0) aviso(`Juntando fotos e rascunhos… ${i}/${pts.length} furos`);
+    for (const f of (sondagemDe(p).fotos || [])) {
+      const b = await bytesDoAnexo(f);
+      if (b) fotos.push({ nome: `${raiz}/FOTOS DO CAMPO/${limpaNome(p.st)}/${limpaNome(f.nome || f.id)}${/\.\w+$/.test(f.nome || '') ? '' : '.' + b.ext}`, bytes: b.bytes });
+      else faltou.push(`${p.st}: foto ${f.nome || f.id}`);
+    }
+    const e = ensaioDoPonto(p, pl);
+    if (e && typeof anexosDoEnsaio === 'function') for (const { aba, a } of anexosDoEnsaio(e)) {
+      const b = await bytesDoAnexo(a);
+      if (b) fotos.push({ nome: `${raiz}/RASCUNHOS/${limpaNome(p.st)}/${limpaNome(aba)} - ${limpaNome((a.nome || a.id).replace(/\.\w+$/, ''))}.${b.ext}`, bytes: b.bytes });
+      else faltou.push(`${p.st}: rascunho ${a.nome || a.id}`);
+    }
+  }
+  // os dados, para restaurar (plano, pontos e cada ensaio inteiro)
+  const ensaios = pts.map(p => ensaioDoPonto(p, pl)).filter(Boolean);
+  txt('DADOS PARA RESTAURAR/plano.json', JSON.stringify({ versao: 1, gerado_em: new Date().toISOString(), gerado_por: quemSou(),
+    app: typeof VERSAO_APP !== 'undefined' ? VERSAO_APP : '', plano: pl, pontos: pts, ensaios }, null, 1));
+  const r = resumoDoPlano(pl);
+  txt('0 LEIA-ME.txt', `CÓPIA DO PLANO DE SONDAGEM ${pl.codigo} — ${pl.nome || ''}
+${[pl.cliente, pl.obra, pl.os, pl.rodovia].filter(Boolean).join(' · ')}
+Gerada em ${new Date().toLocaleString('pt-BR')} por ${quemSou() || '—'}.
+
+${r.n} pontos · ${r.sondados} sondados · ${r.aprovados} aprovados · ${pts.filter(p => p.enviado_em).length} enviados à contratante
+${ensaios.length} ensaio(s) · ${sondados.length} boletim(ns) · ${fotos.length} foto(s) e rascunho(s)
+
+1 RELATORIO DE ANDAMENTO.html  — abra no navegador; para PDF: Imprimir → Salvar como PDF
+2 BOLETINS DE SONDAGEM.html    — os boletins de todos os furos sondados
+3 LAUDOS DOS ENSAIOS.html      — o laudo de cada ensaio (boletim, folhas de laboratório e in situ)
+4 PLANILHA DE ANDAMENTO.csv    — abre no Excel
+5 GOOGLE EARTH.kml · 6 DADOS DIGITAIS AGS4.ags
+FOTOS DO CAMPO/<ST>            — fotos com data, hora e GPS gravados na imagem
+RASCUNHOS/<ST>                 — as fichas fotografadas que viraram os lançamentos
+DADOS PARA RESTAURAR/plano.json — tudo do plano em dados (plano, pontos e ensaios)
+${faltou.length ? `\nNão vieram (não estavam neste aparelho nem no banco):\n${faltou.map(x => '  - ' + x).join('\n')}\n` : ''}`);
+  return { docs, fotos, faltou, raiz, n: { ensaios: ensaios.length, boletins: sondados.length, fotos: fotos.length } };
+}
+
+/** Divide em .zip de até ~45 MB: a 1ª parte leva os documentos e os dados; as fotos enchem as demais. */
+function partesDoArquivo({ docs, fotos }) {
+  const grupos = [[...docs]];
+  let tam = docs.reduce((s, a) => s + a.bytes.length, 0);
+  for (const f of fotos) {
+    if (tam + f.bytes.length > LIMITE_PARTE && grupos[grupos.length - 1].length) { grupos.push([]); tam = 0; }
+    grupos[grupos.length - 1].push(f); tam += f.bytes.length;
+  }
+  return grupos.map(montarZip);
+}
+
+const nomeDaParte = (pl, i, n) => `PLANO-${limpaNome(pl.codigo).replace(/\s+/g, '_')}-${new Date().toISOString().slice(0, 10)}${n > 1 ? `-parte${i + 1}de${n}` : ''}.zip`;
+
+/** Finaliza: monta a cópia, guarda no banco e esconde o plano. Devolve { partes, n, faltou }. */
+async function arquivarPlano(pl, aviso = () => {}) {
+  if (!(typeof bancoLigado === 'function' && bancoLigado())) throw new Error('Entre no banco de dados (Painel de controle) para arquivar — a cópia fica guardada lá.');
+  const montado = await arquivosDoPlano(pl, aviso);
+  const blobs = partesDoArquivo(montado), partes = [];
+  const pasta = `${banco.perfil.empresa_id}/plano-${limpaNome(pl.codigo).replace(/\s+/g, '_')}`;
+  for (const [i, blob] of blobs.entries()) {
+    const nome = nomeDaParte(pl, i, blobs.length), caminho = `${pasta}/${Date.now()}-${nome}`;
+    aviso(`Guardando no banco: parte ${i + 1} de ${blobs.length} (${fmt(blob.size / 1048576, 1)} MB)…`);
+    try { await pedidoBanco(`/storage/v1/object/arquivos/${caminho}`, { metodo: 'POST', corpo: blob, cab: { 'Content-Type': 'application/zip', 'x-upsert': 'true' }, tempo: 600000 }); }
+    catch (e) {
+      if (e.status === 404 || /bucket/i.test(e.message)) throw new Error('O banco ainda não tem o armazenamento das cópias: rode o 17-arquivo-planos.sql no Supabase.');
+      throw e;
+    }
+    partes.push({ caminho, nome, bytes: blob.size });
+  }
+  const campos = { arquivado_em: new Date().toISOString(), arquivado_por: quemSou() || '', arquivo: partes };
+  try { await pedidoBanco(`/rest/v1/planos?id=eq.${pl.id}`, { metodo: 'PATCH', cab: { Prefer: 'return=minimal' }, corpo: campos }); }
+  catch (e) {
+    if (/arquivad|column/i.test(e.message)) throw new Error('O banco ainda não tem as colunas do arquivo: rode o 17-arquivo-planos.sql no Supabase.');
+    throw e;
+  }
+  Object.assign(pl, campos);
+  if (PLANOS.aberto === pl.id) PLANOS.aberto = (planosVisiveis()[0] || {}).id || null;
+  FILTRO_PLANO.aberto = null; gravarPlanos();
+  ARQUIVO_LOCAL[pl.id] = blobs.map((b, i) => ({ blob: b, nome: partes[i].nome }));
+  return { partes, n: montado.n, faltou: montado.faltou };
+}
+/* as partes que acabaram de ser geradas ficam à mão para baixar sem ir ao banco */
+const ARQUIVO_LOCAL = {};
+
+async function desarquivarPlano(pl) {
+  const campos = { arquivado_em: null, arquivado_por: null };
+  await pedidoBanco(`/rest/v1/planos?id=eq.${pl.id}`, { metodo: 'PATCH', cab: { Prefer: 'return=minimal' }, corpo: campos });
+  Object.assign(pl, campos); PLANOS.aberto = pl.id; gravarPlanos();
+}
+
+async function baixarParteArquivo(pl, i) {
+  const loc = (ARQUIVO_LOCAL[pl.id] || [])[i];
+  if (loc) return baixarBlob(loc.blob, loc.nome);
+  const parte = (pl.arquivo || [])[i]; if (!parte) return;
+  const b = await pedidoBanco(`/storage/v1/object/authenticated/arquivos/${parte.caminho}`, { blob: true, tempo: 600000 });
+  baixarBlob(b, parte.nome);
+}
+function baixarBlob(blob, nome) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+/* ---------- tela ---------- */
+let ARQUIVANDO = null, CONFIRMA_ARQUIVO = null;
+
+/** Cartão "Finalizar e arquivar" no fim do painel do plano (só gestor). */
+function htmlFinalizarPlano(pl) {
+  const pts = pontosDo(pl.id), env = pts.filter(p => p.enviado_em).length, falta = pts.length - env;
+  const confirma = CONFIRMA_ARQUIVO === pl.id;
+  return `<div class="card" id="plFinalCard">
+    <h2>Finalizar e arquivar o plano <span class="tag">${env} de ${pts.length} enviados</span></h2>
+    <p class="hint" style="margin:0 0 10px">Monta a <b>cópia completa</b> do plano — relatório de andamento, boletins, laudos de todos os ensaios,
+      planilha, Google Earth, AGS 4, fotos do campo, rascunhos e os dados para restaurar —, guarda no banco de dados e
+      <b>esconde</b> o plano e os ensaios dele do app. Dá para baixar a cópia e desarquivar depois.</p>
+    ${falta && confirma ? `<div class="aviso erro"><span class="ico">!</span><span><b>${falta} ponto(s) ainda não foram enviados à contratante.</b> Arquivar assim mesmo?</span></div>` : ''}
+    <div class="rasc-botoes">
+      ${ARQUIVANDO === pl.id ? '<button class="btn" type="button" disabled>Arquivando…</button>'
+        : falta && confirma ? `<button class="btn ghost perigo" type="button" id="plArquivarSim">Arquivar mesmo assim</button><button class="btn ghost" type="button" id="plArquivarNao">Cancelar</button>`
+        : `<button class="btn" type="button" id="plArquivar">📦 Finalizar e arquivar</button>`}
+      <button class="btn ghost" type="button" id="plCopiaLocal"${ARQUIVANDO ? ' disabled' : ''}>Só baixar a cópia (sem arquivar)</button>
+    </div>
+    <div id="plArqAviso"></div></div>`;
+}
+
+/** Cartão dos planos arquivados (só gestor), no fim da aba Planos. */
+function htmlPlanosArquivados() {
+  const arq = PLANOS.planos.filter(planoArquivado);
+  if (!arq.length) return '';
+  const linha = pl => `<div class="pl-arq">
+      <div><b>Plano ${atr(pl.codigo)}</b> <span class="hint">${atr(pl.nome || '')}${pl.cliente ? ' · ' + atr(pl.cliente) : ''}</span><br>
+        <span class="hint">Arquivado em ${dataHoraBr(pl.arquivado_em)}${pl.arquivado_por ? ' por ' + atr(pl.arquivado_por) : ''} · ${(pl.arquivo || []).length} arquivo(s), ${fmt((pl.arquivo || []).reduce((s, x) => s + (x.bytes || 0), 0) / 1048576, 1)} MB</span></div>
+      <div class="rasc-botoes">${(pl.arquivo || []).map((x, i) => `<button class="btn ghost sm" type="button" data-arqbaixar="${pl.id}|${i}">⬇ ${pl.arquivo.length > 1 ? `Parte ${i + 1}` : 'Baixar a cópia'}</button>`).join('')}
+        <button class="btn ghost sm" type="button" data-arqvolta="${pl.id}">Desarquivar</button></div></div>`;
+  return `<details class="card pl-arquivados"${FILTRO_PLANO.arqAberto ? ' open' : ''} id="plArquivados">
+    <summary><b>Planos arquivados</b> <span class="tag">${arq.length}</span></summary>
+    <p class="hint">Escondidos do app (o plano e os ensaios dele). A cópia completa está no banco de dados.</p>
+    ${arq.map(linha).join('')}<div id="plArqListaAviso"></div></details>`;
+}
+
+function ligarArquivoPlano(pl) {
+  const on = (id, fn) => { const el = $(id); if (el && !el.dataset.ligado) { el.dataset.ligado = '1'; el.addEventListener('click', fn); } };
+  const aviso = (tipo, msg) => avisoPlano('plArqAviso', tipo, msg);
+  const vai = async () => {
+    CONFIRMA_ARQUIVO = null; ARQUIVANDO = pl.id; montarPlanos();
+    try {
+      const r = await arquivarPlano(pl, t => aviso('', t));
+      ARQUIVANDO = null; FILTRO_PLANO.arqAberto = true; montarPlanos();
+      avisoPlano('plAviso', 'ok', `Plano <b>${atr(pl.codigo)}</b> arquivado: ${r.n.ensaios} ensaio(s), ${r.n.boletins} boletim(ns), ${r.n.fotos} foto(s) e rascunho(s) em
+        ${r.partes.length} arquivo(s) no banco.${r.faltou.length ? ` <b>${r.faltou.length} foto(s) não estavam disponíveis</b> (lista no LEIA-ME da cópia).` : ''} Ele e os ensaios dele saíram das listas — veja em <b>Planos arquivados</b>.`);
+    } catch (e) { ARQUIVANDO = null; montarPlanos(); avisoPlano('plArqAviso', 'erro', atr(e.message)); }
+  };
+  on('plArquivar', () => {
+    const falta = pontosDo(pl.id).filter(p => !p.enviado_em).length;
+    if (falta) { CONFIRMA_ARQUIVO = pl.id; montarPlanos(); const c = $('plFinalCard'); if (c) c.scrollIntoView({ block: 'nearest' }); return; }
+    vai();
+  });
+  on('plArquivarSim', vai);
+  on('plArquivarNao', () => { CONFIRMA_ARQUIVO = null; montarPlanos(); });
+  on('plCopiaLocal', async () => {
+    const bt = $('plCopiaLocal'); if (bt) bt.disabled = true;
+    try {
+      const blobs = partesDoArquivo(await arquivosDoPlano(pl, t => aviso('', t)));
+      blobs.forEach((b, i) => setTimeout(() => baixarBlob(b, nomeDaParte(pl, i, blobs.length)), i * 800));
+      aviso('ok', `Cópia montada: ${blobs.length} arquivo(s) .zip baixando. O plano continua no app.`);
+    } catch (e) { aviso('erro', atr(e.message)); }
+    if (bt) bt.disabled = false;
+  });
+}
+
+function ligarPlanosArquivados() {
+  const d = $('plArquivados');
+  if (d && !d.dataset.ligado) { d.dataset.ligado = '1'; d.addEventListener('toggle', () => { FILTRO_PLANO.arqAberto = d.open; }); }
+  document.querySelectorAll('[data-arqbaixar]').forEach(bt => { if (bt.dataset.ligado) return; bt.dataset.ligado = '1';
+    bt.addEventListener('click', async () => {
+      const [id, i] = bt.dataset.arqbaixar.split('|'); const pl = planoPorId(id); if (!pl) return;
+      bt.disabled = true; avisoPlano('plArqListaAviso', '', 'Baixando a cópia do banco…');
+      try { await baixarParteArquivo(pl, +i); avisoPlano('plArqListaAviso', 'ok', 'Cópia baixada.'); }
+      catch (e) { avisoPlano('plArqListaAviso', 'erro', atr(e.message)); }
+      bt.disabled = false;
+    }); });
+  document.querySelectorAll('[data-arqvolta]').forEach(bt => { if (bt.dataset.ligado) return; bt.dataset.ligado = '1';
+    bt.addEventListener('click', async () => {
+      const pl = planoPorId(bt.dataset.arqvolta); if (!pl) return;
+      try { await desarquivarPlano(pl); montarPlanos(); avisoPlano('plAviso', 'ok', `Plano <b>${atr(pl.codigo)}</b> desarquivado: ele e os ensaios dele voltaram às listas.`);
+        if (typeof montarHistorico === 'function') montarHistorico(); if (typeof montarAprovacao === 'function') montarAprovacao(); }
+      catch (e) { avisoPlano('plArqListaAviso', 'erro', atr(e.message)); }
+    }); });
 }
 
 /* ============================================================
