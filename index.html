@@ -12874,7 +12874,7 @@ function cartaoRascunho(aba) {
   return `<div class="card rasc-card">
     <h2>${bol ? 'Foto do boletim — preenchimento automático' : 'Ler rascunho'} <span class="tag">${f.codigo}</span></h2>
     <p class="hint">${bol
-      ? `Fotografe o <b>boletim de campo</b> preenchido — a ficha <b>${f.codigo}</b> ou o boletim do próprio sondador (pode ser mais de uma foto ou PDF). A IA preenche camadas, ${f.codigo.endsWith('P') ? 'golpes metro a metro, métodos, lavagem, ' : ''}nível d'água, cota e o final do furo; você confere e aplica. A foto fica anexada ao ensaio.`
+      ? `Fotografe o <b>boletim de campo</b> preenchido — a ficha <b>${f.codigo}</b> ou o boletim do próprio sondador (pode ser mais de uma foto ou PDF). A IA preenche camadas, ${f.codigo.endsWith('P') ? 'golpes metro a metro, métodos, lavagem, ' : ''}nível d'água, cota e o final do furo; você confere e aplica. A foto fica anexada ao ensaio.${f.codigo.endsWith('P') ? ' Aqui as duas folhas juntas; para uma folha de cada vez, use <b>Ler foto da folha 1</b> e <b>da folha 2</b> no boletim abaixo.' : ''}`
       : `Fotografe a ficha <b>${f.codigo}</b> preenchida (ou escolha a foto / o PDF). Uma foto preenche a aba inteira: a IA lê, você confere e aplica.`}</p>
     <div class="rasc-botoes">
       <label class="btn"><input type="file" accept="image/*" capture="environment" data-rascfoto="${aba}" hidden>📷 Fotografar</label>
@@ -12894,9 +12894,9 @@ function cartaoRascunho(aba) {
 }
 
 /** Botão "Ler foto" de um cartão: lê só os blocos daquele cartão. */
-function botaoFotoCard(aba, blocos) {
+function botaoFotoCard(aba, blocos, rotulo = '📷 Ler foto') {
   return `<div class="rasc-mini-linha"><label class="btn sm ghost"><input type="file" accept="image/*,application/pdf"
-      data-rascfoto="${aba}" data-rascblocos="${blocos.join(',')}" hidden>📷 Ler foto</label></div>
+      data-rascfoto="${aba}" data-rascblocos="${blocos.join(',')}" hidden>${rotulo}</label></div>
     <div id="rascAviso-${aba}-${blocos.join('_')}"></div>`;
 }
 
@@ -26718,6 +26718,8 @@ async function htmlBoletins(pl, pontos) {
 /* ------------------------------------------------------------
    Aba "Boletim" do ensaio de solos: o campo + o cabeçalho da obra num lugar só
    ------------------------------------------------------------ */
+/** Blocos (folhas) do boletim SPT recolhidos pelo usuário — resistem à tela remontar. */
+const BOL_FOLHA_FECHADA = {};
 function htmlAbaBoletimSlab() {
   const s = estado.slab; if (!s) return '';
   s.bol = s.bol || vazioBol();
@@ -26747,18 +26749,7 @@ function htmlAbaBoletimSlab() {
     return `<tr><td class="cap">${i + 1},00</td>${[0, 1, 2].map(k => `<td data-rot="${k + 1}º golpes">${nSl(`bol.spt.${i}.g.${k}`, '1')}</td><td data-rot="cm" class="pen">${nSl(`bol.spt.${i}.p.${k}`, '1').replace('<input ', '<input placeholder="15" ')}</td>`).join('')}
       <td class="num forte" data-sptn="${i}">${r ? r.txt : '—'}</td>
       <td>${tSl(`bol.spt.${i}.compac`, r ? classeSpt(r.n, c && c.material) : '')}</td></tr>`; }).join('');
-  return `${typeof cartaoRascunho === 'function' ? cartaoRascunho('slbol') : ''}
-    ${doCampo ? `<div class="card destaque-card"><h2>Do campo <span class="tag">${atr(p.st)}</span></h2>
-      <p class="hint" style="margin:0 0 8px">${[so.data && 'sondado em ' + dataBrSl(so.data), so.equipe, ehNumero(so.prof) && fmt(so.prof, 2) + ' m',
-        (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${so.fim.dist} m do ponto` : ''}`,
-        (so.fotos || []).length && so.fotos.length + ' foto(s)'].filter(Boolean).join(' · ')}</p>
-      <button class="btn ghost sm" type="button" id="bolPuxar">Puxar de novo o que o campo marcou</button></div>` : ''}
-    <div class="card">
-      <h2>Boletim de sondagem <span class="tag">${spt ? 'SPT · NBR 6484' : 'trado · NBR 9603'}</span></h2>
-      <div class="pl-passos" style="grid-template-columns:1fr 1fr">${tipoBt('trado', 'Trado', 'NBR 9603')}${tipoBt('spt', 'Percussão (SPT)', 'NBR 6484')}</div>
-      <p class="hint" style="margin:0 0 10px">Cliente, obra, local, prefixo e OS vêm dos <b>dados gerais do plano</b> (ou da Identificação)<span id="bolFalta"></span>.
-        A folha do boletim sai na frente do laudo.</p>
-      <div class="grid4">
+  const gridHtml = `      <div class="grid4">
         <div><label>${spt ? 'Início' : 'Data de execução'}</label>${dSl('bol.data')}</div>
         ${spt ? `<div><label>Fim</label>${dSl('bol.dataFim')}</div>` : ''}
         <div><label>Sondador</label>${tSl('bol.sondador')}</div>
@@ -26776,13 +26767,13 @@ function htmlAbaBoletimSlab() {
         <div><label>Revisão</label>${tSl('bol.revisao', 'R0')}</div>`
           : `<div style="grid-column:span 2"><label>Outras informações <span class="hint">em branco: km, amostra e hora do furo</span></label>${tSl('bol.outras', '', false)}</div>`}
         <div style="grid-column:span 4"><label>Observações</label>${tSl('bol.obs', '', false)}</div>
-      </div>
-      ${spt ? `<h3 class="sub-card">Golpes (SPT) — por metro <span class="hint">penetração em branco = 15 cm</span></h3>
+      </div>`;
+  const golpesHtml = `<h3 class="sub-card">Golpes (SPT) — por metro <span class="hint">penetração em branco = 15 cm</span></h3>
       <div class="tabwrap"><table class="t-form pl-spt"><thead><tr><th>Prof. (m)</th><th>1º</th><th>cm</th><th>2º</th><th>cm</th><th>3º</th><th>cm</th><th>N-SPT</th><th>Compacidade / consistência</th></tr></thead>
         <tbody>${linhasSpt || '<tr><td colspan="9" class="hint">Toque em + Metro para lançar os golpes de cada metro.</td></tr>'}</tbody></table></div>
       <div class="rasc-botoes" style="margin-top:8px"><button class="btn ghost sm" type="button" id="bolSptMais">+ Metro</button>
-        ${b.spt.length ? '<button class="btn ghost sm" type="button" id="bolSptMenos">✕ Último metro</button>' : ''}</div>
-      <h3 class="sub-card">Método de perfuração (m)</h3>
+        ${b.spt.length ? '<button class="btn ghost sm" type="button" id="bolSptMenos">✕ Último metro</button>' : ''}</div>`;
+  const metodosHtml = `      <h3 class="sub-card">Método de perfuração (m)</h3>
       <div class="grid4">
         <div><label>T. cavadeira — início</label>${nSl('bol.metodos.cavadeira.de', '0.01')}</div><div><label>T. cavadeira — término</label>${nSl('bol.metodos.cavadeira.ate', '0.01')}</div>
         <div><label>T. espiral — início</label>${nSl('bol.metodos.espiral.de', '0.01')}</div><div><label>T. espiral — término</label>${nSl('bol.metodos.espiral.ate', '0.01')}</div>
@@ -26792,10 +26783,29 @@ function htmlAbaBoletimSlab() {
       <div class="grid4">
         <div><label>Prof. início</label>${nSl('bol.lavTempo.inicio', '0.01')}</div><div><label>Estágio 1</label>${nSl('bol.lavTempo.e1', '0.01')}</div>
         <div><label>Estágio 2</label>${nSl('bol.lavTempo.e2', '0.01')}</div><div><label>Estágio 3</label>${nSl('bol.lavTempo.e3', '0.01')}</div>
-      </div>` : ''}
-      <h3 class="sub-card">Camadas do solo (descrição ${spt ? 'do material' : 'tátil-visual'})</h3>
+      </div>`;
+  const camadasBloco = `      <h3 class="sub-card">Camadas do solo (descrição ${spt ? 'do material' : 'tátil-visual'})</h3>
       <div class="pl-camadas">${camadasHtml || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
-      <button class="btn ghost sm" type="button" id="bolCamada">+ Camada</button>
+      <button class="btn ghost sm" type="button" id="bolCamada">+ Camada</button>`;
+  // SPT: cada folha da ficha NS-L2P num bloco que recolhe, com a sua própria foto (uma foto por folha)
+  const resumoF1 = [ehNumero(b.prof) ? fmt(b.prof, 2) + ' m' : '', (b.camadas || []).length ? b.camadas.length + ' camada(s)' : ''].filter(Boolean).join(' · ');
+  const blocoFolha = (k, titulo, sub, idxs, html) => `<details class="pl-bloco bol-folha" data-bolfolha="${k}"${BOL_FOLHA_FECHADA[k] ? '' : ' open'}>
+      <summary><b>${titulo}</b><span class="hint">${sub}</span></summary><div class="pl-bloco-corpo">
+      ${typeof botaoFotoCard === 'function' ? botaoFotoCard('slbol', idxs, `📷 Ler foto da ${titulo.split(' —')[0].toLowerCase()}`) : ''}${html}</div></details>`;
+  return `${typeof cartaoRascunho === 'function' ? cartaoRascunho('slbol') : ''}
+    ${doCampo ? `<div class="card destaque-card"><h2>Do campo <span class="tag">${atr(p.st)}</span></h2>
+      <p class="hint" style="margin:0 0 8px">${[so.data && 'sondado em ' + dataBrSl(so.data), so.equipe, ehNumero(so.prof) && fmt(so.prof, 2) + ' m',
+        (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${so.fim.dist} m do ponto` : ''}`,
+        (so.fotos || []).length && so.fotos.length + ' foto(s)'].filter(Boolean).join(' · ')}</p>
+      <button class="btn ghost sm" type="button" id="bolPuxar">Puxar de novo o que o campo marcou</button></div>` : ''}
+    <div class="card">
+      <h2>Boletim de sondagem <span class="tag">${spt ? 'SPT · NBR 6484' : 'trado · NBR 9603'}</span></h2>
+      <div class="pl-passos" style="grid-template-columns:1fr 1fr">${tipoBt('trado', 'Trado', 'NBR 9603')}${tipoBt('spt', 'Percussão (SPT)', 'NBR 6484')}</div>
+      <p class="hint" style="margin:0 0 10px">Cliente, obra, local, prefixo e OS vêm dos <b>dados gerais do plano</b> (ou da Identificação)<span id="bolFalta"></span>.
+        A folha do boletim sai na frente do laudo.</p>
+      ${spt ? blocoFolha('f1', 'Folha 1 — furo, métodos e camadas', `NS-L2P 1/2${resumoF1 ? ' · ' + resumoF1 : ''}`, [0, 1, 2, 3], gridHtml + metodosHtml + camadasBloco)
+        + blocoFolha('f2', 'Folha 2 — golpes por metro', `NS-L2P 2/2 · ${b.spt.length} metro(s)`, [4], golpesHtml)
+        : gridHtml + camadasBloco}
     </div>`;
 }
 
@@ -26820,6 +26830,8 @@ function avisoFaltaBol() {
 
 function ligarAbaBoletimSlab() {
   const s = estado.slab; if (!s || !$('slBol')) return;
+  document.querySelectorAll('[data-bolfolha]').forEach(d => { if (d.dataset.ligadoBol) return; d.dataset.ligadoBol = '1';
+    d.addEventListener('toggle', () => { BOL_FOLHA_FECHADA[d.dataset.bolfolha] = !d.open; }); });
   const on = (id, fn) => { const el = $(id); if (el && !el.dataset.ligadoBol) { el.dataset.ligadoBol = '1'; el.addEventListener('click', fn); } };
   on('bolCamada', () => {
     const cs = s.bol.camadas = s.bol.camadas || [], ult = cs[cs.length - 1];
