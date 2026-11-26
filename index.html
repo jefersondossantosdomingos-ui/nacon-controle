@@ -798,6 +798,13 @@ details.pl-etapa[open] > summary.pl-etapa-cab{margin-bottom:8px;} details.pl-eta
 .pl-fotos-bloco{border-top:1px solid var(--border); padding:10px 0 4px; margin-top:4px;}
 .pl-sub{display:flex; align-items:baseline; gap:8px; font-size:13px; margin:0 0 8px;} .pl-sub .hint{margin-left:auto; font-size:12px; font-weight:400;}
 .pl-passos{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;}
+/* furo deslocado: os furos do ponto e o motivo */
+.pl-furos{display:flex; flex-direction:column; gap:4px; margin:0 0 8px;}
+.pl-furo{border:1px solid var(--borda); border-radius:8px; padding:6px 10px; font-size:13px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline;}
+.pl-furo.atual{border-color:var(--mk-acento-500); background:color-mix(in srgb, var(--mk-acento-500) 6%, transparent);}
+.pl-desloc-mot{display:flex; flex-direction:column; gap:4px; margin-top:8px;}
+.pl-desloc-mot label{display:flex; gap:10px; align-items:flex-start; font-weight:500; text-transform:none; letter-spacing:0; font-size:14px; line-height:1.3; margin:0; padding:4px 0; cursor:pointer;}
+.pl-desloc-mot input[type="radio"]{width:20px; height:20px; min-height:0; flex:none; margin:0; padding:0; accent-color:var(--mk-acento-500);}
 .pl-passo{display:flex; flex-direction:column; align-items:center; gap:1px; padding:8px 4px; border-radius:var(--radius-sm); cursor:pointer;
   border:1px dashed var(--border); background:transparent; color:var(--text-2); font:inherit; min-height:58px;}
 .pl-passo .ic{font-size:14px; line-height:1;} .pl-passo .rot{font-size:12px; font-weight:700;} .pl-passo .hr{font-size:11px;}
@@ -26978,6 +26985,7 @@ function htmlCampoDoPonto(p, pl) {
   const alerta = ['chegada', 'inicio', 'fim'].map(k => so[k]).filter(x => x && ehNumero(x.dist) && x.dist > LIMITE_DIST_CAMPO);
   const nFotos = (so.fotos || []).length;
   return `
+    ${htmlFurosDoPonto(p)}
     <div class="pl-passos">${marca(so.inicio, 'Início do furo')}${marca(so.fim, 'Fim do furo')}</div>
     ${alerta.length ? `<div class="aviso erro"><span class="ico">!</span><span>Marcado a mais de ${LIMITE_DIST_CAMPO} m da coordenada do plano (${alerta.map(x => distTexto(x.dist)).join(', ')}). Confira se é o ponto certo.</span></div>` : ''}
     <div id="plsAviso"></div>
@@ -26990,15 +26998,57 @@ function htmlCampoDoPonto(p, pl) {
         As fotos ficam. O início anterior fica guardado no histórico do ponto.
         <span class="rasc-botoes" style="margin-top:8px"><button class="btn sm" type="button" id="plsReiniciarSim">↺ Reiniciar</button>
         <button class="btn sm ghost" type="button" id="plsReiniciarNao">Não</button></span></span></div>` : ''}
+    ${DESLOC_A_CONFIRMAR === p.id ? `<div class="aviso agenda"><span class="ico">⊕</span><span><b>Abrir um furo deslocado, próximo deste?</b>
+        O furo ${atr(rotuloFuro(p.st, nFurosDoPonto(p)))} fica guardado com o motivo (e tem o seu boletim); o novo, ${atr(rotuloFuro(p.st, nFurosDoPonto(p) + 1))}, começa agora com hora e GPS.
+        <span class="pl-desloc-mot">${MOTIVOS_DESLOC.map(([k, t], i) => `<label><input type="radio" name="plsMotivo" value="${k}"${i ? '' : ' checked'}> ${t}</label>`).join('')}</span>
+        <input type="text" id="plsMotivoTxt" placeholder="Detalhe (opcional) — ex.: rede de água a 0,40 m" style="margin-top:6px">
+        <span class="rasc-botoes" style="margin-top:8px"><button class="btn sm" type="button" id="plsDeslocSim">⊕ Abrir furo deslocado</button>
+        <button class="btn sm ghost" type="button" id="plsDeslocNao">Cancelar</button></span></span></div>` : ''}
     <div class="rasc-botoes pl-acoes">
       ${so.inicio ? '' : '<button class="btn sm" type="button" id="plsIniciar">▶ Iniciar furo</button>'}
-      ${so.fim || !so.inicio ? '' : '<button class="btn sm" type="button" id="plsFinalizar">■ Finalizar furo</button>'}
+      ${so.fim ? '' : `<button class="btn ${so.inicio ? '' : 'ghost '}sm" type="button" id="plsFinalizar">■ Finalizar furo</button>`}
       ${so.inicio && REINICIO_A_CONFIRMAR !== p.id ? '<button class="btn ghost sm" type="button" id="plsReiniciar">↺ Reiniciar furo</button>' : ''}
+      ${so.inicio && DESLOC_A_CONFIRMAR !== p.id ? '<button class="btn ghost sm" type="button" id="plsDesloc">⊕ Furo deslocado</button>' : ''}
       <button class="btn ${so.fim ? 'sm' : 'ghost sm'}" type="button" id="plsAbrirBol">Preencher o boletim</button>
       ${so.data ? '<button class="btn ghost sm" type="button" id="plsBoletim">Boletim (PDF)</button>' : ''}</div>
     <p class="hint" style="margin:6px 0 0">Data, profundidade, nível d'água, camadas e demais dados vão na aba <b>Boletim</b>.${(so.reinicios || []).length
       ? ` Furo reiniciado ${so.reinicios.length} vez(es) — último às ${horaBr(so.reinicios[so.reinicios.length - 1].em)}.` : ''}</p>`;
 }
+/* ============================================================
+   FURO DESLOCADO — interferência ou impossibilidade na coordenada: o operador abre um novo furo
+   próximo. sondagem.anteriores = [{ inicio, fim, motivo, texto, em, por }] (furos 1, 2…); o furo
+   atual continua em sondagem.inicio / fim. Cada furo tem o seu boletim: ST-001, ST-001A, ST-001B…
+   ============================================================ */
+const MOTIVOS_DESLOC = [['interferencia', 'Interferência (rede, tubulação, pavimento, construção)'], ['impenetravel', 'Impenetrável (matacão, rocha, entulho)'],
+  ['desmoronamento', 'Desmoronamento das paredes'], ['acesso', 'Sem acesso / impossível na coordenada'], ['outro', 'Outro motivo']];
+const rotuloFuro = (st, n) => n <= 1 ? String(st || '') : `${st || ''}${String.fromCharCode(63 + n)}`;   // 2 → A, 3 → B
+const nFurosDoPonto = p => 1 + (sondagemDe(p).anteriores || []).length;
+const motivoTexto = f => f && f.motivo ? `${((MOTIVOS_DESLOC.find(m => m[0] === f.motivo) || ['', f.motivo])[1]).replace(/ \(.*\)$/, '')}${f.texto ? ' — ' + f.texto : ''}` : '';
+/** Os furos do ponto, do 1º ao atual: { n, rotulo, inicio, fim, motivo, texto, atual, desloc (m do furo 1) } */
+function furosDoPonto(p) {
+  const so = sondagemDe(p), ant = so.anteriores || [];
+  const l = ant.map((f, i) => ({ ...f, n: i + 1, rotulo: rotuloFuro(p.st, i + 1), atual: false }));
+  l.push({ n: ant.length + 1, rotulo: rotuloFuro(p.st, ant.length + 1), inicio: so.inicio || null, fim: so.fim || null, atual: true });
+  const base = l[0].inicio;
+  l.forEach(f => { f.desloc = f.n > 1 && base && f.inicio && ehNumero(base.lat) && ehNumero(f.inicio.lat) ? distanciaM(base, f.inicio) : null; });
+  return l;
+}
+function htmlFurosDoPonto(p) {
+  if (nFurosDoPonto(p) < 2) return '';
+  return `<div class="pl-furos">${furosDoPonto(p).map(f => `<div class="pl-furo${f.atual ? ' atual' : ''}"><b>Furo ${f.n} · ${atr(f.rotulo)}</b>
+      <span class="hint">${f.inicio ? horaBr(f.inicio.em) : '—'}${f.fim ? ' → ' + horaBr(f.fim.em) : ''}${ehNumero(f.desloc) ? ` · a ${distTexto(f.desloc)} do furo 1` : ''}
+      ${f.atual ? ' · atual' : ' · ' + atr(motivoTexto(f))}</span></div>`).join('')}</div>`;
+}
+let DESLOC_A_CONFIRMAR = null;
+/** Guarda o furo atual (com o motivo) e começa o furo deslocado: novo início com hora e GPS. */
+async function abrirFuroDeslocado(p, motivo, texto) {
+  const so = sondagemDe(p);
+  const ant = [...(so.anteriores || []), { inicio: so.inicio || null, fim: so.fim || { em: new Date().toISOString() }, motivo, texto: String(texto || '').trim(),
+    em: new Date().toISOString(), por: String(quemSou() || '').toUpperCase().trim() }];
+  salvarCampo(p, { anteriores: ant, fim: null, data: null, lat: null, lon: null, distancia: null });
+  return marcarFuro(p, 'inicio');
+}
+
 /* Reiniciar o furo (começou no ponto errado, leu o QR antes da hora…): pede confirmação na própria tela */
 let REINICIO_A_CONFIRMAR = null;
 /** Novo início com hora e GPS; o fim (e a data/posição que ele gravou) sai; o anterior vai para sondagem.reinicios. */
@@ -27048,7 +27098,18 @@ function ligarCampoDoPonto(p, pl) {
     montarPlanos();
     avisoPlano('plsAviso', ehNumero(m.dist) && m.dist > LIMITE_DIST_CAMPO ? 'erro' : 'ok', textoMarcaFuro('inicio', m, pos));
   });
-  on('plsReiniciar', 'click', () => { REINICIO_A_CONFIRMAR = p.id; montarPlanos(); });
+  on('plsReiniciar', 'click', () => { REINICIO_A_CONFIRMAR = p.id; DESLOC_A_CONFIRMAR = null; montarPlanos(); });
+  on('plsDesloc', 'click', () => { DESLOC_A_CONFIRMAR = p.id; REINICIO_A_CONFIRMAR = null; montarPlanos(); });
+  on('plsDeslocNao', 'click', () => { DESLOC_A_CONFIRMAR = null; montarPlanos(); });
+  on('plsDeslocSim', 'click', async ev => {
+    const mot = (document.querySelector('input[name="plsMotivo"]:checked') || {}).value || 'outro', txt = ($('plsMotivoTxt') || {}).value || '';
+    ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
+    const { m, pos } = await abrirFuroDeslocado(p, mot, txt);
+    DESLOC_A_CONFIRMAR = null; abertoCampo(p).campo = true;
+    montarPlanos();
+    const f = furosDoPonto(p).pop();
+    avisoPlano('plsAviso', 'ok', `Furo deslocado <b>${atr(f.rotulo)}</b> iniciado às <b>${horaBr(m.em)}</b>${ehNumero(f.desloc) ? ` — a <b>${distTexto(f.desloc)}</b> do furo 1` : ''}${pos ? '' : ' — sem GPS (ligue a localização do aparelho)'}. Cada furo tem o seu boletim.`);
+  });
   on('plsReiniciarNao', 'click', () => { REINICIO_A_CONFIRMAR = null; montarPlanos(); });
   on('plsReiniciarSim', 'click', async ev => {
     ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
@@ -27332,6 +27393,83 @@ const vazioBol = () => ({ data: '', sondador: '', prof: null, relevo: '', vegeta
   outras: '', obs: '', camadas: [], tipo: 'trado', dataFim: '', naHora: '', verificacao: '', revisao: '', contrato: '', cidade: '', spt: [],
   metodos: { cavadeira: { de: null, ate: null }, espiral: { de: null, ate: null }, lavagem: { de: null, ate: null } },
   lavTempo: { inicio: null, e1: null, e2: null, e3: null }, naLeituras: [] });
+/* Um boletim por furo (furo deslocado): estado.slab.bol é o do furo que está na tela (bolFuro);
+   os dos outros furos ficam em estado.slab.bolOutros = { n: bol }. */
+function furosDoEnsaio() {
+  const s = estado.slab || {}, p = s.plano && typeof pontoDoVinculo === 'function' ? pontoDoVinculo(s.plano) : null;
+  const n = Math.max(p ? nFurosDoPonto(p) : 1, s.bolFuro || 1, ...Object.keys(s.bolOutros || {}).map(Number));
+  return { p, n };
+}
+function garantirFuroBol() {
+  const s = estado.slab; if (!s) return;
+  s.bolOutros = s.bolOutros || {};
+  // só com o ponto ligado: antes disso não se sabe de que furo é o boletim
+  if (!s.bolFuro) { const { p, n } = furosDoEnsaio(); if (p) s.bolFuro = n; }
+}
+/** Boletim novo de um furo: o cabeçalho do furo que está na tela; furo abandonado já sai com o motivo. */
+function novoBolDoFuro(n) {
+  const s = estado.slab, b = vazioBol(), a = s.bol || {}, { p } = furosDoEnsaio();
+  ['tipo', 'sondador', 'relevo', 'vegetacao', 'terreno', 'verificacao', 'revisao', 'contrato', 'cidade'].forEach(k => { if (a[k]) b[k] = a[k]; });
+  const f = p ? furosDoPonto(p).find(x => x.n === n) : null;
+  if (f && f.inicio) b.data = dataLocal(new Date(f.inicio.em));
+  if (f && !f.atual && f.motivo) {
+    b.parada = b.tipo === 'spt' ? (f.motivo === 'impenetravel' ? 'amostrador' : 'paralisado')
+      : ({ impenetravel: 'impenetravel', desmoronamento: 'desmoronamento' }[f.motivo] || motivoTexto(f).toUpperCase());
+    b.obs = `FURO ABANDONADO: ${motivoTexto(f).toUpperCase()}.`;
+  }
+  return b;
+}
+/** Troca o boletim que está na tela pelo do furo n. */
+function trocarFuroBol(n) {
+  const s = estado.slab; garantirFuroBol();
+  const atual = s.bolFuro || furosDoEnsaio().n;
+  if (n === atual) return;
+  s.bolOutros[atual] = s.bol;
+  s.bol = s.bolOutros[n] || novoBolDoFuro(n);
+  delete s.bolOutros[n];
+  s.bolFuro = n;
+}
+/** Os boletins de todos os furos, do 1º ao atual: [{ n, bol }] (estado de um ensaio — o da tela ou um salvo). */
+function boletinsPorFuro(sl, nFuros) {
+  if (!sl) return Array.from({ length: nFuros }, (_, i) => ({ n: i + 1, bol: null }));
+  const ver = sl.bolFuro || nFuros, l = [];
+  for (let n = 1; n <= Math.max(nFuros, ver); n++) l.push({ n, bol: n === ver ? sl.bol : (sl.bolOutros || {})[n] || null });
+  return l;
+}
+/** Coordenada UTM (SIRGAS 2000 / WGS 84) de um ponto lat/lon, no fuso dado. */
+function geoParaUtm(lat, lon, fuso = 20, hemisferio = 'S') {
+  if (!ehNumero(lat) || !ehNumero(lon)) return null;
+  const a = 6378137, f = 1 / 298.257222101, e2 = f * (2 - f), ep2 = e2 / (1 - e2), k0 = 0.9996, r = Math.PI / 180;
+  const fi = lat * r, l0 = ((fuso - 1) * 6 - 180 + 3) * r, dl = lon * r - l0;
+  const N = a / Math.sqrt(1 - e2 * Math.sin(fi) ** 2), T = Math.tan(fi) ** 2, C = ep2 * Math.cos(fi) ** 2, A = Math.cos(fi) * dl;
+  const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 ** 3 / 256) * fi - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 ** 3 / 1024) * Math.sin(2 * fi)
+    + (15 * e2 * e2 / 256 + 45 * e2 ** 3 / 1024) * Math.sin(4 * fi) - (35 * e2 ** 3 / 3072) * Math.sin(6 * fi));
+  const este = 500000 + k0 * N * (A + (1 - T + C) * A ** 3 / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * A ** 5 / 120);
+  let norte = k0 * (M + N * Math.tan(fi) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A ** 4 / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * A ** 6 / 720));
+  if (hemisferio === 'S') norte += 10000000;
+  return { norte, este };
+}
+/** Os dados de cada folha de boletim de um ponto: um por furo (ST-001, ST-001A…). */
+function dadosPorFuro(base, sl, p, pl) {
+  const furos = p ? furosDoPonto(p) : [{ n: 1, rotulo: base.estaca, atual: true }];
+  const bols = boletinsPorFuro(sl, furos.length);
+  return bols.map(({ n, bol }) => {
+    const f = furos.find(x => x.n === n) || { n, rotulo: rotuloFuro(p ? p.st : base.estaca, n) };
+    const b = f.atual !== false ? juntarBol(bol, p ? bolDoPonto(p) : null) : juntarBol(bol || (sl ? null : null), null);
+    if (!bol && f.atual === false) { b.data = f.inicio ? dataLocal(new Date(f.inicio.em)) : ''; b.obs = `FURO ABANDONADO: ${motivoTexto(f).toUpperCase()}.`; }
+    if (bol && b.tipo !== bol.tipo) b.tipo = bol.tipo;
+    if (!bol && base.bol) b.tipo = base.bol.tipo;
+    const g = f.inicio && ehNumero(f.inicio.lat) && f.n > 1 && pl ? geoParaUtm(f.inicio.lat, f.inicio.lon, pl.fuso || 20, pl.hemisferio || 'S') : null;
+    const so = p ? (f.atual === false ? { ...sondagemDe(p), inicio: f.inicio, fim: f.fim } : sondagemDe(p)) : base.so;
+    return { ...base, bol: b, so, estaca: f.rotulo || base.estaca,
+      furo: furos.length > 1 ? { n, total: furos.length, rotulo: f.rotulo, desloc: f.desloc, motivo: f.atual === false ? motivoTexto(f) : '', utm: g, original: rotuloFuro(p && p.st, 1) } : null };
+  });
+}
+/** Texto do furo deslocado para a folha do boletim. */
+const textoFuroBol = d => !d.furo ? '' : d.furo.n === 1
+  ? `Furo 1 de ${d.furo.total}${d.furo.motivo ? ' — abandonado: ' + d.furo.motivo : ''}`
+  : `Furo deslocado ${d.furo.n} de ${d.furo.total}${ehNumero(d.furo.desloc) ? `, a ${distTexto(d.furo.desloc)} do ${d.furo.original}` : ''}${d.furo.motivo ? ' — abandonado: ' + d.furo.motivo : ''}`;
+
 /** Leituras do nível d'água: [{ data, hora, prof, na }] — o N.A. é lido em vários dias.
  *  Boletim antigo (só bol.na) vira a 1ª leitura. */
 function leiturasNa(b) {
@@ -27373,6 +27511,8 @@ function juntarBol(manda, completa) {
 /** Ensaio aberto a partir do ponto: o que o campo já marcou entra no boletim do ensaio (sem apagar o que o laboratório digitou). */
 function puxarCampoParaBol(p, { tudo = false } = {}) {
   const s = estado.slab; if (!s || !p) return false;
+  garantirFuroBol();
+  if ((s.bolFuro || nFurosDoPonto(p)) !== nFurosDoPonto(p)) return false;         // o campo marca o furo atual; o boletim na tela é de outro furo
   const antes = JSON.stringify(s.bol || {});
   s.bol = tudo ? juntarBol(bolDoPonto(p), s.bol) : juntarBol(s.bol, bolDoPonto(p));
   return JSON.stringify(s.bol) !== antes;
@@ -27383,6 +27523,8 @@ function bolParaPonto() {
   const s = estado.slab;
   if (!s || estado.modo !== 'slab' || !s.plano || !bolPreenchido(s.bol) || typeof pontoDoVinculo !== 'function') return;
   const p = pontoDoVinculo(s.plano); if (!p) return;
+  garantirFuroBol();
+  if ((s.bolFuro || nFurosDoPonto(p)) !== nFurosDoPonto(p)) return;              // só o boletim do furo atual vai para o ponto
   sincronizarNa(s.bol);
   const b = s.bol, so = sondagemDe(p);
   const novo = { data: b.data || so.data, equipe: b.sondador || so.equipe, prof: ehNumero(b.prof) ? b.prof : so.prof, relevo: b.relevo, vegetacao: b.vegetacao,
@@ -27415,7 +27557,16 @@ function dadosBoletimDoPonto(p, pl) {
   const bol = juntarBol(est && est.slab && est.slab.bol, bolDoPonto(p));
   return { ...cabBoletim(pl, est), bol, estaca: p.st, registro: p.registro || '', p, pl, so: sondagemDe(p) };
 }
+/** Um por furo (furo deslocado: ST-001, ST-001A…). */
+function dadosBoletinsDoPonto(p, pl) {
+  const e = ensaioDoPonto(p, pl), est = e && e.foto && e.foto.estado, base = dadosBoletimDoPonto(p, pl);
+  return nFurosDoPonto(p) < 2 && !(est && est.slab && Object.keys(est.slab.bolOutros || {}).length) ? [base] : dadosPorFuro(base, est && est.slab, p, pl);
+}
 
+function dadosBoletinsDoEnsaio() {
+  const base = dadosBoletimDoEnsaio(), s = estado.slab || {};
+  return furosDoEnsaio().n < 2 ? [base] : dadosPorFuro(base, s, base.p, base.pl);
+}
 /** O mesmo, para o ensaio que está na tela (aba Boletim / PDF do laudo). */
 function dadosBoletimDoEnsaio() {
   const s = estado.slab || {}, m = estado.medicao || {};
@@ -27479,8 +27630,8 @@ function htmlFolhaBoletim(d, folhaTxt = 'Única') {
         <tr><td colspan="4" class="t">Coordenadas (m)</td><td class="apr" rowspan="3"><span class="r">Aprovado:</span>
           <div class="ass">${atr(responsavel)}<br>${atr(crea)}</div></td></tr>
         <tr><td colspan="2" class="t">N</td><td class="t">E</td><td class="t">Fuso</td></tr>
-        <tr><td colspan="2" class="c">${p ? fmt(p.norte, 3) : ''}</td><td class="c">${p ? fmt(p.este, 3) : ''}</td><td class="c">${p ? zonaUtm(pl, g) : ''}</td></tr>
-        <tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td colspan="3" class="obs"><span class="r">Observações:</span> ${atr(b.obs || '')}</td><td></td></tr>
+        <tr><td colspan="2" class="c">${d.furo && d.furo.utm ? fmt(d.furo.utm.norte, 3) : p ? fmt(p.norte, 3) : ''}</td><td class="c">${d.furo && d.furo.utm ? fmt(d.furo.utm.este, 3) : p ? fmt(p.este, 3) : ''}</td><td class="c">${p ? zonaUtm(pl, g) : ''}</td></tr>
+        <tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td colspan="3" class="obs"><span class="r">Observações:</span> ${atr([textoFuroBol(d), b.obs].filter(Boolean).join(' · '))}</td><td></td></tr>
       </table>
     </div>`;
 }
@@ -27667,7 +27818,7 @@ function htmlFolhaSpt(d, folhaTxt = '1 / 1') {
         <div><span>Local:</span> ${atr(d.local)}</div>
         <div><span>Data:</span> Início: ${b.data ? dataBrSl(b.data) : ''}<br><span></span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Fim: ${(b.dataFim || b.data) ? dataBrSl(b.dataFim || b.data) : ''}</div></td>
       <td class="dir"><div class="furo">Furo: <b>${atr(d.estaca)}</b></div><div>Cota(m): ${ehNumero(b.cota) ? fmt(b.cota, 3) : '-'}</div>
-        <div>Coordenadas: N= ${p && ehNumero(p.norte) ? p.norte.toFixed(4).replace('.', ',') : ''}</div><div class="e">E= ${p && ehNumero(p.este) ? p.este.toFixed(4).replace('.', ',') : ''}</div></td>
+        <div>Coordenadas: N= ${d.furo && d.furo.utm ? d.furo.utm.norte.toFixed(4).replace('.', ',') : p && ehNumero(p.norte) ? p.norte.toFixed(4).replace('.', ',') : ''}</div><div class="e">E= ${d.furo && d.furo.utm ? d.furo.utm.este.toFixed(4).replace('.', ',') : p && ehNumero(p.este) ? p.este.toFixed(4).replace('.', ',') : ''}</div></td>
       <td class="fo">Folha:<b>${folhaTxt}</b></td></tr></table>
     ${svg}
     <div class="leg">LEGENDA DAS ABREVIAÇÕES PRESENTES NA COLUNA DE INTERPRETAÇÃO GEOLÓGICA:<br>${LEGENDA_SPT}</div>
@@ -27678,7 +27829,7 @@ function htmlFolhaSpt(d, folhaTxt = '1 / 1') {
       <td><table class="mini"><tr><th colspan="2">Lavagem por tempo - 30 min</th></tr>
         <tr><td class="d">Prof. Início (m):</td><td>${ehNumero(lv.inicio) ? fmt(lv.inicio, 2) : ''}</td></tr>
         ${[1, 2, 3].map(k => `<tr><td class="d">Estágio ${k} (m):</td><td>${ehNumero(lv['e' + k]) ? fmt(lv['e' + k], 2) : ''}</td></tr>`).join('')}</table></td>
-      <td class="obs"><u>Observação:</u><br>${atr(b.obs || '')}</td></tr></table>
+      <td class="obs"><u>Observação:</u><br>${atr([textoFuroBol(d), b.obs].filter(Boolean).join(' · '))}</td></tr></table>
     <table class="assspt"><tr>
       <td>${atr(cidade)}${cidade ? ', ' : ''}${atr(dataExtensoBr(d.dataEnsaio || b.dataFim || b.data))}<br>Contrato nº: ${atr(contrato)}<br>Revisão: ${atr(b.revisao || 'R0')}</td>
       <td>Sondador: ${atr(b.sondador || '')}<br>Verificação: ${atr(b.verificacao || '')}</td>
@@ -27706,9 +27857,9 @@ const CSS_SPT = `
 
 /** Folha do boletim no PDF do laudo de solos (vem antes das folhas do laboratório). */
 function folhaSlabBol(pacote) {
-  if (estado.modo !== 'slab' || !estado.slab || !bolPreenchido(estado.slab.bol)) return [];
-  const d = dadosBoletimDoEnsaio();
-  return [`<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d) : htmlFolhaBoletim(d))];
+  const s = estado.slab;
+  if (estado.modo !== 'slab' || !s || !(bolPreenchido(s.bol) || Object.values(s.bolOutros || {}).some(bolPreenchido))) return [];
+  return dadosBoletinsDoEnsaio().map(d => `<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d) : htmlFolhaBoletim(d)));
 }
 
 async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
@@ -27717,10 +27868,11 @@ async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
   const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
   const folhas = [];
   for (const p of pontos) {
-    const d = dadosBoletimDoPonto(p, pl);
+    const ds = dadosBoletinsDoPonto(p, pl), d = ds[ds.length - 1];
     const fotos = [];
     if (!semFotos) for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
-    folhas.push(d.bol.tipo === 'spt' ? htmlFolhaSpt(d, fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(d, fotos.length ? '1/2' : 'Única'));
+    ds.forEach((x, i) => { const ult = i === ds.length - 1;
+      folhas.push(x.bol.tipo === 'spt' ? htmlFolhaSpt(x, ult && fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(x, ult && fotos.length ? '1/2' : 'Única')); });
     if (fotos.length) folhas.push(`<div class="folha nbol fotos-folha">
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(p.st)} · ${atr(d.cliente || '')}</div>
@@ -27743,6 +27895,14 @@ const BOL_FOLHA_FECHADA = {};
 function htmlAbaBoletimSlab() {
   const s = estado.slab; if (!s) return '';
   s.bol = s.bol || vazioBol();
+  garantirFuroBol();
+  const fe = furosDoEnsaio(), furosP = fe.p ? furosDoPonto(fe.p) : [];
+  const chipsFuro = fe.n < 2 ? '' : `<div class="card destaque-card"><h2>Furos deste ponto <span class="tag">${fe.n} furos · um boletim cada</span></h2>
+      <div class="pl-passos" style="grid-template-columns:repeat(${Math.min(fe.n, 4)},1fr)">${Array.from({ length: fe.n }, (_, i) => i + 1).map(n => {
+        const f = furosP.find(x => x.n === n) || { rotulo: rotuloFuro(fe.p ? fe.p.st : '', n) };
+        return `<button type="button" class="pl-passo${n === (s.bolFuro || fe.n) ? ' feito proximo' : ''}" data-bolfuro="${n}"><span class="rot">Furo ${n} · ${atr(f.rotulo)}</span>
+          <span class="hr">${f.atual ? 'atual' : f.motivo ? atr(motivoTexto(f)) : ''}${ehNumero(f.desloc) ? ' · ' + distTexto(f.desloc) : ''}</span></button>`; }).join('')}</div>
+      <p class="hint" style="margin:6px 0 0">O boletim abaixo é o do furo marcado. Cada furo sai na sua folha (no laudo e nos boletins do plano).</p></div>`;
   if (s.bol.naSeco === true) s.bol.naSeco = '1'; else if (s.bol.naSeco === false) s.bol.naSeco = '';
   const b = s.bol, d = dadosBoletimDoEnsaio(), p = d.p, so = d.so || {};
   const op = (lista, pares) => [['', ''], ...(pares ? lista : lista.map(x => [x, x]))];
@@ -27819,6 +27979,7 @@ function htmlAbaBoletimSlab() {
       <summary><b>${titulo}</b><span class="hint">${sub}</span></summary><div class="pl-bloco-corpo">
       ${typeof botaoFotoCard === 'function' ? botaoFotoCard('slbol', idxs, `📷 Ler foto da ${titulo.split(' —')[0].toLowerCase()}`) : ''}${html}</div></details>`;
   return `${typeof cartaoRascunho === 'function' ? cartaoRascunho('slbol') : ''}
+    ${chipsFuro}
     ${doCampo ? `<div class="card destaque-card"><h2>Do campo <span class="tag">${atr(p.st)}</span></h2>
       <p class="hint" style="margin:0 0 8px">${[so.data && 'sondado em ' + dataBrSl(so.data), so.equipe, ehNumero(so.prof) && fmt(so.prof, 2) + ' m',
         (so.camadas || []).length && so.camadas.length + ' camada(s)', so.fim && `fim do furo ${horaBr(so.fim.em)}${ehNumero(so.fim.dist) ? ` a ${distTexto(so.fim.dist)} do ponto` : ''}`,
@@ -27869,6 +28030,8 @@ function ligarAbaBoletimSlab() {
   });
   document.querySelectorAll('[data-bolcamtira]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
     bt.addEventListener('click', () => { s.bol.camadas.splice(+bt.dataset.bolcamtira, 1); montarSlab(); atualizar(); }); });
+  document.querySelectorAll('[data-bolfuro]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
+    bt.addEventListener('click', () => { trocarFuroBol(+bt.dataset.bolfuro); montarSlab(); atualizar(); }); });
   document.querySelectorAll('[data-boltipo]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
     bt.addEventListener('click', () => { s.bol.tipo = bt.dataset.boltipo; montarSlab(); atualizar(); }); });
   on('bolNaMais', () => { (s.bol.naLeituras = s.bol.naLeituras || []).push({ data: '', hora: '', prof: null, na: null }); montarSlab(); atualizar(); });
