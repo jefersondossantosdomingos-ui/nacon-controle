@@ -13912,7 +13912,7 @@ function montarSlab() {
   const cfg = s.cfg, m = estado.medicao;
 
   /* ---------- IDENTIFICAÇÃO ---------- */
-  const pl = s.plano, pedidosPl = pl && typeof TIPOS_PLANO !== 'undefined' ? TIPOS_PLANO.filter(t => (pl.ensaios || {})[t.k]).map(t => t.rot) : [];
+  const pl = s.plano, pedidosPl = pl && typeof TIPOS_PLANO !== 'undefined' ? TIPOS_PLANO.filter(t => ensaiosPl(pl.ensaios)[t.k]).map(t => t.rot) : [];
   $('slIdent').innerHTML = cartaoRascunho('slident') + (pl ? `<div class="card destaque-card"><h2>Plano de sondagem ${atr(pl.codigo)} <span class="tag">${atr(pl.st)}</span></h2>
       <p class="hint" style="margin:0">Pedido para este ponto: <b>${pedidosPl.join(' · ') || '—'}</b>. Registro e identificação vieram do plano.</p></div>` : '') + `
     <div class="card">
@@ -14214,7 +14214,7 @@ function montarSlab() {
    Ensaio ligado a um ponto do plano: só aparecem as abas dos ensaios que o plano pede para aquele ponto
    (furo SPT que pede só granulometria não mostra limites, compactação nem ISC). Aba que já tem dado
    lançado continua à vista. Sem plano: todas. */
-const ABAS_DO_TIPO_SL = { insitu: ['slinsitu'], granul: ['slgranul'], sed: ['slsed'], isc: ['sllim', 'slcomp', 'slcbr'], comp: ['slcomp'], mct: ['slmct'] };
+const ABAS_DO_TIPO_SL = { insitu: ['slinsitu'], granul: ['slgranul'], sed: ['slsed'], isc: ['slcomp', 'slcbr'], lim: ['sllim'], comp: ['slcomp'], mct: ['slmct'] };
 const ABAS_PARTE_SL = { granul: 'slgranul', sed: 'slsed', lim: 'sllim', comp: 'slcomp', isc: 'slcbr', insitu: 'slinsitu', mct: 'slmct' };
 function abasSlabDoPlano(calc = null) {
   const s = estado.slab;
@@ -14223,7 +14223,7 @@ function abasSlabDoPlano(calc = null) {
   // Sem a lista e sem o plano (ensaio antigo, plano que não existe mais): todas as abas.
   // o que vale é o que o ponto pede hoje (o ensaio guarda uma cópia de quando foi aberto)
   const pt = typeof pontoDoVinculo === 'function' ? pontoDoVinculo(s.plano) : null;
-  const ens = pt ? (pt.ensaios || {}) : (s.plano.ensaios || {});
+  const ens = ensaiosPl(pt ? pt.ensaios : s.plano.ensaios);
   if (!pt && !Object.values(ens).some(Boolean)) return null;
   const abas = new Set(['slident', 'slbol']);
   Object.entries(ens).forEach(([k, v]) => { if (v) (ABAS_DO_TIPO_SL[k] || []).forEach(a => abas.add(a)); });
@@ -25901,7 +25901,8 @@ const TIPOS_PLANO = [
   { k: 'insitu', rot: 'Densidade in situ', curto: 'In situ', manual: true },
   { k: 'granul', rot: 'Granulometria (peneiramento)', curto: 'Granul.' },
   { k: 'sed',    rot: 'Peneiramento e sedimentação', curto: 'Sedim.' },
-  { k: 'isc',    rot: 'ISC, expansão e limites', curto: 'ISC/Lim.' },
+  { k: 'lim',    rot: 'Limites de liquidez e plasticidade', curto: 'Limites' },
+  { k: 'isc',    rot: 'ISC e expansão', curto: 'ISC' },
   { k: 'comp',   rot: 'Compactação', curto: 'Compact.' },
   { k: 'mr',     rot: 'Módulo de resiliência', curto: 'MR', manual: true },
   { k: 'mct',    rot: 'Classificação MCT (Mini-MCV e perda por imersão)', curto: 'MCT' },
@@ -25910,6 +25911,9 @@ const ETAPAS_PLANO = [
   ['asondar', 'A sondar'], ['sondado', 'Sondado'], ['registrado', 'Amostra registrada'], ['ensaio', 'Em ensaio'],
   ['aguardando', 'Aguardando aprovação'], ['devolvido', 'Devolvido'], ['aprovado', 'Aprovado'], ['enviado', 'Enviado ao cliente'],
 ];
+/** Os ensaios que o ponto pede. Ponto importado antes de "Limites" virar um ensaio à parte (26/11):
+ *  o ISC pedia os limites junto — continua pedindo. */
+const ensaiosPl = e => !e ? {} : (e.isc && e.lim === undefined ? { ...e, lim: true } : e);
 const usaPlanos = () => typeof MARCA === 'object' && MARCA && !!MARCA.planosSondagem;
 
 /* ------------------------------------------------------------
@@ -25952,7 +25956,8 @@ function tipoDaColuna(txt) {
   if (/DENSIDADE|IN SITU/.test(t)) return 'insitu';
   if (/RESILI/.test(t)) return 'mr';
   if (/COMPACTA|PROCTOR/.test(t)) return 'comp';
-  if (/ISC|CBR|EXPANS|LIMITE|PLASTIC/.test(t)) return 'isc';
+  if (/ISC|CBR|EXPANS/.test(t)) return 'isc';
+  if (/LIMITE|PLASTIC|LIQUIDEZ/.test(t)) return 'lim';
   if (/GRANUL|PENEIRA/.test(t)) return 'granul';
   return null;
 }
@@ -25986,6 +25991,8 @@ function planoDaGrade(linhas) {
     else if (k === 'comp' && /MODIFICAD/.test(normPl(texto))) energia = 'MODIFICADA';
     else if (k === 'comp' && /NORMAL/.test(normPl(texto))) energia = energia || 'NORMAL';
     colunas.push({ c, k, texto: texto.replace(/\s+/g, ' ') });
+    // "ISC - EXPANSÃO - LIMITES - PLASTICIDADE" numa coluna só: pede os dois (aparecem separados no plano)
+    if (k === 'isc' && /LIMITE|PLASTIC|LIQUIDEZ/.test(normPl(texto))) colunas.push({ c, k: 'lim', texto: texto.replace(/\s+/g, ' ') });
   }
   const pontos = [];
   let trecho = '', titulo = '';
@@ -26001,6 +26008,7 @@ function planoDaGrade(linhas) {
     if (cKm >= 0 && String(l[cKm + 1] ?? '').trim() === '+' && numPl(l[cKm + 2]) !== null) km = numPl(l[cKm]) + numPl(l[cKm + 2]) / 1000;
     else if (typeof l[cKm] === 'string' && /\+/.test(l[cKm])) { const [a, b] = l[cKm].split('+'); km = numPl(a) + numPl(b) / 1000; }
     const ens = {}; colunas.forEach(({ c, k }) => { if (String(l[c] ?? '').trim()) ens[k] = true; });
+    if (ens.isc && !ens.lim) ens.lim = false;      // ISC sem limites (os pontos antigos sem a chave "lim" pedem os dois)
     pontos.push({ st: st.toUpperCase(), trecho, localizacao: cLoc >= 0 ? String(l[cLoc] ?? '').trim() : '',
       norte: cN >= 0 ? numPl(l[cN]) : null, este: cE >= 0 ? numPl(l[cE]) : null, km: Number.isFinite(km) ? +km.toFixed(3) : null,
       prof: cProf >= 0 ? numPl(l[cProf]) : null, ensaios: ens, ...(cObs >= 0 && String(l[cObs] ?? '').trim() ? { obs: String(l[cObs]).trim() } : {}) });
@@ -26067,10 +26075,10 @@ function situacaoDosEnsaios(p, e) {
   const sit = e ? situacaoDe(e) : null, partes = (e && e.resumo && e.resumo.partes) || {}, feitos = p.feitos || {};
   const out = {};
   TIPOS_PLANO.forEach(({ k, manual }) => {
-    if (!(p.ensaios || {})[k]) { out[k] = null; return; }
+    if (!ensaiosPl(p.ensaios)[k]) { out[k] = null; return; }
     // in situ lançado na aba In situ do ensaio conta como o ensaio; a marcação à mão continua valendo (feito por fora)
     const peloEnsaio = k === 'insitu' && !!partes.insitu;
-    const feito = peloEnsaio || (manual ? !!feitos[k] : (k === 'isc' ? partes.isc && partes.lim : !!partes[k]));
+    const feito = peloEnsaio || (manual ? !!feitos[k] : !!partes[k]);
     out[k] = !feito ? 'pendente' : peloEnsaio ? (sit === 'aprovado' ? 'aprovado' : 'lancado') : (manual || sit === 'aprovado') ? 'aprovado' : 'lancado';
   });
   return out;
@@ -26221,7 +26229,7 @@ function preencherComPonto(p, pl) {
       estudo: pl.estudo || estado.slab.ident.estudo, local: [p.km !== null ? 'KM ' + kmTexto(p.km) : '', pl.rodovia].filter(Boolean).join(' ').toUpperCase(),
       energia: normPl(pl.energia || estado.slab.ident.energia).startsWith('INTERMEDI') ? 'INTERMEDIÁRIA' : (pl.energia || estado.slab.ident.energia) });
     if (p.sondagem && p.sondagem.data && !estado.slab.ident.dataComp) estado.slab.ident.dataColeta = p.sondagem.data;
-    estado.slab.plano = { id: pl.id, codigo: pl.codigo, pontoId: p.id, st: p.st, ensaios: { ...(p.ensaios || {}) } };
+    estado.slab.plano = { id: pl.id, codigo: pl.codigo, pontoId: p.id, st: p.st, ensaios: { ...ensaiosPl(p.ensaios) } };
     // furo SP-…: o boletim do ensaio já abre como SPT (NBR 6484)
     if (typeof furoSpt === 'function' && furoSpt(p) && estado.slab.bol) estado.slab.bol.tipo = 'spt';
     if (typeof puxarCampoParaBol === 'function') puxarCampoParaBol(p);      // o que o campo marcou vai para a aba Boletim
@@ -26595,12 +26603,12 @@ function imprimirLaudosDoPlano(pl, pontos) {
 
 function detalheDoPonto(p, pl, gestor) {
   const geo = geoDoPonto(p), e = ensaioDoPonto(p, pl), s = situacaoDosEnsaios(p, e), so = p.sondagem || {};
-  const pedidos = TIPOS_PLANO.filter(t => (p.ensaios || {})[t.k]);
+  const pedidos = TIPOS_PLANO.filter(t => ensaiosPl(p.ensaios)[t.k]);
   const et = etapaDoPonto(p), sitE = e ? situacaoDe(e) : '';
   // cada etapa num cartão numerado: o título já diz como está; o detalhe fica dentro
   const etapa = (n, titulo, feito, resumo, corpo) => `<div class="pl-etapa${feito ? ' feita' : ''}">
       <div class="pl-etapa-cab"><span class="n">${feito ? '✓' : n}</span><b>${titulo}</b><span class="res">${resumo}</span></div>${corpo}</div>`;
-  const manuais = TIPOS_PLANO.filter(t => t.manual && (p.ensaios || {})[t.k]);
+  const manuais = TIPOS_PLANO.filter(t => t.manual && ensaiosPl(p.ensaios)[t.k]);
   return `<div class="pl-detalhe">
     <div class="pl-det-topo"><h3>${atr(p.st)}</h3><span class="pl-et ${et}">${rotEtapa(et)}</span>
       <button class="btn ghost sm pl-fechar" type="button" data-plponto="${p.id}" title="Fechar">✕</button></div>
@@ -27999,7 +28007,7 @@ function htmlEtiquetas(pl, pontos, o = {}) {
   const lab = TIPOS_PLANO.filter(t => !['insitu'].includes(t.k));
   const linha = (rot, v) => `<tr><th>${rot}</th><td>${v}</td></tr>`;
   const etq = p => {
-    const g = geoDoPonto(p), ens = p.ensaios || {};
+    const g = geoDoPonto(p), ens = ensaiosPl(p.ensaios);
     const labs = lab.filter(t => ens[t.k]).map(t => t.curto);
     const loc = [`km ${kmTexto(p.km)}`, p.trecho ? e(p.trecho) : '',
       g ? `${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}` : '', ehNumero(p.norte) ? `N ${fmt(p.norte, 3)} · E ${fmt(p.este, 3)}` : ''].filter(Boolean).join(' · ');
