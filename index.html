@@ -14002,7 +14002,7 @@ function montarSlab() {
     </div>`;
 
   /* ---------- ISC ---------- */
-  const prensas = (cfg.prensas || []).map(p => [p.numero, `${p.numero} — ${p.nome || 'prensa'} (K ${fmt(p.k, 5)})`]);
+  const prensas = (cfg.prensas || []).map(p => [p.numero, atr(`${p.numero} — ${p.nome || 'prensa'} (K ${fmt(p.k, 5)})`)]);
   const linI = (rot, html) => `<tr><td class="cap">${rot}</td>${P5SL.map(i => `<td data-rot="Ponto ${i + 1}">${html(i)}</td>`).join('')}</tr>`;
   $('slCbr').innerHTML = cartaoRascunho('slcbr') + `
     <div class="card">
@@ -14067,7 +14067,7 @@ function montarSlab() {
         <div><label>Altura do CP do ISC (mm)</label>${nSl('cfg.alturaCp', '0.1')}</div>
       </div>
       <div style="margin-top:12px"><label>Picnômetros — nº; peso vazio (g); peso com água (g), um por linha</label>
-        <textarea id="slPicTxt" rows="6">${(cfg.picnometros || []).map(p => `${p.numero}; ${p.vazio}; ${p.comAgua}`).join('\n')}</textarea></div>
+        <textarea id="slPicTxt" rows="6">${atr((cfg.picnometros || []).map(p => `${p.numero}; ${p.vazio}; ${p.comAgua}`).join('\n'))}</textarea></div>
       <button class="btn" type="button" id="btnGuardarCfgSl" style="margin-top:12px">Guardar calibrações</button>
       <div id="slCfgAviso"></div>`;
 
@@ -22109,10 +22109,10 @@ function cartoesComRede(lista) {
     try { return cartoesDoHistorico([e]); }
     catch (erro) {
       return `<div class="ensaio-salvo"><div class="cabeca"><div class="quem">
-          <b>${(e.resumo && e.resumo.registro) || 'Ensaio sem identificação'}</b>
-          <span>Não consegui ler este ensaio: ${erro.message}</span></div></div>
+          <b>${atr((e.resumo && e.resumo.registro) || 'Ensaio sem identificação')}</b>
+          <span>Não consegui ler este ensaio: ${atr(erro.message)}</span></div></div>
         <div class="acoes">
-          <button class="btn ghost sm" type="button" data-editar="${e.id}">Tentar abrir</button>
+          <button class="btn ghost sm" type="button" data-editar="${atr(e.id)}">Tentar abrir</button>
           ${botoesDeExclusao(e)}
         </div></div>`;
     }
@@ -22122,7 +22122,7 @@ function cartoesComRede(lista) {
 /** "Excluir" vira "Confirmar" no próprio cartão, com a consequência escrita. */
 function botoesDeExclusao(e) {
   if (String(confirmandoExclusao) !== String(e.id))
-    return `<button class="btn ghost sm perigo" type="button" data-excluir="${e.id}">Excluir</button>`;
+    return `<button class="btn ghost sm perigo" type="button" data-excluir="${atr(e.id)}">Excluir</button>`;
   const naPlanilha = (typeof nuvem !== 'undefined' && nuvem.url)
     ? ' Some também da planilha e dos outros celulares.' : '';
   return `<span class="confirma-exclusao">Apagar de vez?${naPlanilha}</span>
@@ -22188,24 +22188,24 @@ function cartoesDoHistorico(lista) {
     <div class="ensaio-salvo">
       <div class="cabeca">
         <div class="quem">
-          <b>${r.registro || '—'} · ${r.estaca || '—'}</b>
-          <span>${r.obra || '—'} · ${r.rodovia || '—'} · ${r.camada || '—'}</span>
+          <b>${atr(r.registro || '—')} · ${atr(r.estaca || '—')}</b>
+          <span>${atr(r.obra || '—')} · ${atr(r.rodovia || '—')} · ${atr(r.camada || '—')}</span>
         </div>
         <div class="marcas">
-          <span class="selo">${M ? M.nome : r.modo}</span>
-          <span class="selo claro">${r.folhas} ${r.folhas === 1 ? 'folha' : 'folhas'}</span>
+          <span class="selo">${M ? M.nome : atr(r.modo)}</span>
+          <span class="selo claro">${atr(r.folhas)} ${r.folhas === 1 ? 'folha' : 'folhas'}</span>
           <span class="selo claro">${dataCurta(r.data)}</span>
           ${seloDePendencia(r)}
-          ${e.aprovadoPor ? `<span class="selo claro">✓ ${e.aprovadoPor}</span>` : ''}
+          ${e.aprovadoPor ? `<span class="selo claro">✓ ${atr(e.aprovadoPor)}</span>` : ''}
         </div>
       </div>
       <div class="numeros">
         ${tiles.map(([k, v, u]) => `<div><span class="k">${k}</span>
-          <span class="v">${v}<i>${u}</i></span></div>`).join('')}
+          <span class="v">${atr(v)}<i>${atr(u)}</i></span></div>`).join('')}
       </div>
       <div class="acoes">
-        <button class="btn sm" type="button" data-editar="${e.id}">Editar</button>
-        <button class="btn ghost sm" type="button" data-pdf="${e.id}">Exportar PDF</button>
+        <button class="btn sm" type="button" data-editar="${atr(e.id)}">Editar</button>
+        <button class="btn ghost sm" type="button" data-pdf="${atr(e.id)}">Exportar PDF</button>
         <button class="btn ghost sm zap" type="button" data-zap="${e.id}">WhatsApp</button>
         ${botoesDeExclusao(e)}
       </div>
@@ -25670,7 +25670,7 @@ async function escolherPontoNoEnsaio(id) {
 /** As opções do seletor "Ponto do plano" (todos os planos, ST em ordem). */
 function opcoesPontosDoPlano(selId) {
   return PLANOS.planos.map(pl => `<optgroup label="Plano ${atr(pl.codigo)}${pl.nome ? ' · ' + atr(pl.nome) : ''}">${pontosDo(pl.id).map(p => {
-    const e = ensaioDoPonto(p, pl), extra = e ? ` · ensaio ${atr(e.resumo.registro)}` : p.registro ? ` · reg. ${p.registro}` : p.sondagem && p.sondagem.data ? ' · sondado' : '';
+    const e = ensaioDoPonto(p, pl), extra = e ? ` · ensaio ${atr(e.resumo.registro)}` : p.registro ? ` · reg. ${atr(p.registro)}` : p.sondagem && p.sondagem.data ? ' · sondado' : '';
     return `<option value="${p.id}"${p.id === selId ? ' selected' : ''}>${atr(p.st)} · km ${kmTexto(p.km)}${extra}</option>`; }).join('')}</optgroup>`).join('');
 }
 
@@ -25934,7 +25934,7 @@ function painelDoPlano(pl, gestor) {
     const et = etapaDoPonto(p), e = ensaioDoPonto(p, pl), s = situacaoDosEnsaios(p, e);
     return `<tr class="${f.aberto === p.id ? 'pl-sel' : ''}" data-plponto="${p.id}">
       <td class="cap">${atr(p.st)}</td><td class="num">${kmTexto(p.km)}</td><td class="num">${fmt(p.prof, 2)}</td>
-      <td class="num forte">${p.registro || '—'}</td><td><span class="pl-et ${et}">${rotEtapa(et)}</span></td>
+      <td class="num forte">${p.registro ? atr(p.registro) : '—'}</td><td><span class="pl-et ${et}">${rotEtapa(et)}</span></td>
       <td>${tipos.map(t => s[t.k] ? `<span class="pl-chip ${corChip(s[t.k])}" title="${t.rot}: ${s[t.k]}">${t.curto}</span>` : '').join('')}</td></tr>`;
   };
   const sel = pts.find(p => p.id === f.aberto);
@@ -26035,7 +26035,7 @@ function detalheDoPonto(p, pl, gestor) {
       const res = so.data ? `sondado ${dataBrSl(so.data)}${ehNumero(so.prof) ? ' · ' + fmt(so.prof, 2) + ' m' : ''}` : so.inicio ? `em andamento desde ${horaBr(so.inicio.em)}` : 'a sondar';
       return `<details class="pl-etapa${so.data ? ' feita' : ''}" data-plcampo="${p.id}"${abertoCampo(p).campo ? ' open' : ''}>
         <summary class="pl-etapa-cab"><span class="n">${so.data ? '✓' : 1}</span><b>Campo</b><span class="res">${res}</span></summary>${htmlCampoDoPonto(p, pl)}</details>`; })()}
-    ${etapa(2, 'Amostra', !!p.registro, p.registro ? `<b class="pl-reg">${p.registro}</b>` : 'sem registro',
+    ${etapa(2, 'Amostra', !!p.registro, p.registro ? `<b class="pl-reg">${atr(p.registro)}</b>` : 'sem registro',
       p.registro ? `<p class="hint" style="margin:0">Registrada${p.registrado_em ? ' em ' + dataBrSl(String(p.registrado_em).slice(0, 10)) : ''}${p.registrado_por ? ' por ' + atr(p.registrado_por) : ''}.</p>`
         : `<div class="rasc-botoes"><button class="btn sm" type="button" id="plRegistrar">Registrar amostra (${atr(registroDoPonto(p, pl))})</button></div>`)}
     ${etapa(3, 'Ensaios', sitE === 'aprovado', e ? (SITUACOES[sitE] || sitE) : 'não começado', `
@@ -26167,7 +26167,7 @@ function htmlRelatorioPlano(pl) {
     <h2>Pontos</h2>
     <table><tr><th>ST</th><th>km</th><th>Prof. (m)</th><th>Sondado em</th><th>Registro</th><th class="e">Situação</th>${tipos.map(t => `<th>${t.curto}</th>`).join('')}<th>Enviado em</th></tr>
       ${L.map(({ p, s, so, etapa }) => `<tr><td>${atr(p.st)}</td><td>${kmTexto(p.km)}</td><td>${fmt(p.prof, 2)}</td><td>${so.data ? dataBrSl(so.data) : ''}</td>
-        <td>${p.registro || ''}</td><td class="e">${rotEtapa(etapa)}</td>${tipos.map(t => `<td>${marca(s[t.k])}</td>`).join('')}
+        <td>${atr(p.registro || '')}</td><td class="e">${rotEtapa(etapa)}</td>${tipos.map(t => `<td>${marca(s[t.k])}</td>`).join('')}
         <td>${p.enviado_em ? dataBrSl(String(p.enviado_em).slice(0, 10)) : ''}</td></tr>`).join('')}</table>
     <div class="leg">● aprovado · ◐ lançado, em conferência · ○ pendente · em branco: não pedido no plano</div>
   </body></html>`;
@@ -27230,7 +27230,7 @@ function kmlPlano(pl) {
     const desc = [`km ${kmTexto(p.km)} · ${p.trecho || ''}`, `Profundidade pedida: ${fmt(p.prof, 2)} m`, `Situação: ${rotEtapa(et)}`,
       so.data ? `Sondado em ${dataBrSl(so.data)}${so.equipe ? ' por ' + so.equipe : ''}${ehNumero(so.prof) ? ', ' + fmt(so.prof, 2) + ' m' : ''}` : '',
       p.registro ? `Amostra ${p.registro}` : '', (so.camadas || []).length ? 'Camadas: ' + so.camadas.map(c => `${fmt(c.de, 2)}–${fmt(c.ate, 2)} m ${descCamada(c)}`).join('; ') : '',
-      e && situacaoDe(e) === 'aprovado' ? [r.hrb && 'HRB ' + r.hrb, ehNumero(r.cbr) && 'ISC ' + fmt(r.cbr, 1) + ' %'].filter(Boolean).join(' · ') : ''].filter(Boolean).join('<br>');
+      e && situacaoDe(e) === 'aprovado' ? [r.hrb && 'HRB ' + r.hrb, ehNumero(r.cbr) && 'ISC ' + fmt(r.cbr, 1) + ' %'].filter(Boolean).join(' · ') : ''].filter(Boolean).map(xmlEsc).join('<br>');   // texto do plano/campo escapado no balão do Google Earth
     return `<Placemark><name>${xmlEsc(p.st)}</name><styleUrl>#${et}</styleUrl><description><![CDATA[${desc}]]></description>
       <Point><coordinates>${g.lon.toFixed(7)},${g.lat.toFixed(7)},0</coordinates></Point></Placemark>`;
   }).join('\n');
