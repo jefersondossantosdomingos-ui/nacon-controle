@@ -14138,10 +14138,15 @@ const ABAS_DO_TIPO_SL = { insitu: ['slinsitu'], granul: ['slgranul'], sed: ['sls
 const ABAS_PARTE_SL = { granul: 'slgranul', sed: 'slsed', lim: 'sllim', comp: 'slcomp', isc: 'slcbr', insitu: 'slinsitu' };
 function abasSlabDoPlano(calc = null) {
   const s = estado.slab;
-  // sem a lista do que o plano pede (ensaio antigo ligado ao plano): todas as abas
-  if (!s || !s.plano || !s.plano.ensaios || !Object.values(s.plano.ensaios).some(Boolean)) return null;
+  if (!s || !s.plano) return null;
+  // ponto de um plano importado sem nenhum ensaio marcado (SPT só de sondagem): só Identificação e Boletim.
+  // Sem a lista e sem o plano (ensaio antigo, plano que não existe mais): todas as abas.
+  // o que vale é o que o ponto pede hoje (o ensaio guarda uma cópia de quando foi aberto)
+  const pt = typeof pontoDoVinculo === 'function' ? pontoDoVinculo(s.plano) : null;
+  const ens = pt ? (pt.ensaios || {}) : (s.plano.ensaios || {});
+  if (!pt && !Object.values(ens).some(Boolean)) return null;
   const abas = new Set(['slident', 'slbol']);
-  Object.entries(s.plano.ensaios).forEach(([k, v]) => { if (v) (ABAS_DO_TIPO_SL[k] || []).forEach(a => abas.add(a)); });
+  Object.entries(ens).forEach(([k, v]) => { if (v) (ABAS_DO_TIPO_SL[k] || []).forEach(a => abas.add(a)); });
   const q = calc || (typeof ULTIMO_CALCULO !== 'undefined' && ULTIMO_CALCULO && ULTIMO_CALCULO.slab);
   if (q && !q.erro) { const pt = partesSlab(q); Object.entries(ABAS_PARTE_SL).forEach(([k, a]) => { if (pt[k]) abas.add(a); }); }
   return abas;
