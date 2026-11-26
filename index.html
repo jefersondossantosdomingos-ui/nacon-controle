@@ -26986,11 +26986,28 @@ function htmlCampoDoPonto(p, pl) {
         <label class="btn sm ghost"><input type="file" accept="image/*" capture="environment" id="plsFoto" hidden>📷 Tirar foto</label></div>
       <p class="hint" style="margin:6px 0 0">Data, hora e GPS ficam gravados na própria foto.</p>
       <div class="pl-fotos">${fotos}</div></div>
+    ${REINICIO_A_CONFIRMAR === p.id ? `<div class="aviso agenda"><span class="ico">↺</span><span><b>Reiniciar o furo?</b> O início é marcado de novo agora (hora e GPS)${so.fim ? ' e o fim é apagado' : ''}.
+        As fotos ficam. O início anterior fica guardado no histórico do ponto.
+        <span class="rasc-botoes" style="margin-top:8px"><button class="btn sm" type="button" id="plsReiniciarSim">↺ Reiniciar</button>
+        <button class="btn sm ghost" type="button" id="plsReiniciarNao">Não</button></span></span></div>` : ''}
     <div class="rasc-botoes pl-acoes">
-      ${so.fim ? '' : '<button class="btn sm" type="button" id="plsFinalizar">■ Finalizar furo</button>'}
+      ${so.inicio ? '' : '<button class="btn sm" type="button" id="plsIniciar">▶ Iniciar furo</button>'}
+      ${so.fim || !so.inicio ? '' : '<button class="btn sm" type="button" id="plsFinalizar">■ Finalizar furo</button>'}
+      ${so.inicio && REINICIO_A_CONFIRMAR !== p.id ? '<button class="btn ghost sm" type="button" id="plsReiniciar">↺ Reiniciar furo</button>' : ''}
       <button class="btn ${so.fim ? 'sm' : 'ghost sm'}" type="button" id="plsAbrirBol">Preencher o boletim</button>
       ${so.data ? '<button class="btn ghost sm" type="button" id="plsBoletim">Boletim (PDF)</button>' : ''}</div>
-    <p class="hint" style="margin:6px 0 0">Data, profundidade, nível d'água, camadas e demais dados vão na aba <b>Boletim</b>.</p>`;
+    <p class="hint" style="margin:6px 0 0">Data, profundidade, nível d'água, camadas e demais dados vão na aba <b>Boletim</b>.${(so.reinicios || []).length
+      ? ` Furo reiniciado ${so.reinicios.length} vez(es) — último às ${horaBr(so.reinicios[so.reinicios.length - 1].em)}.` : ''}</p>`;
+}
+/* Reiniciar o furo (começou no ponto errado, leu o QR antes da hora…): pede confirmação na própria tela */
+let REINICIO_A_CONFIRMAR = null;
+/** Novo início com hora e GPS; o fim (e a data/posição que ele gravou) sai; o anterior vai para sondagem.reinicios. */
+async function reiniciarFuro(p) {
+  const so = sondagemDe(p);
+  const hist = [...(so.reinicios || []), { inicio: so.inicio || null, fim: so.fim || null, em: new Date().toISOString(), por: String(quemSou() || '').toUpperCase().trim() }];
+  const limpa = so.fim ? { fim: null, data: null, lat: null, lon: null, distancia: null } : {};
+  salvarCampo(p, { ...limpa, reinicios: hist });
+  return marcarFuro(p, 'inicio');
 }
 
 /** Marca o início ou o fim do furo com hora e GPS (início: pelo QR code da etiqueta; fim: botão Finalizar furo). */
@@ -27025,6 +27042,21 @@ function abertoCampo(p) {
 function ligarCampoDoPonto(p, pl) {
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   document.querySelectorAll('[data-plcampo]').forEach(d => d.addEventListener('toggle', () => { abertoCampo(p).campo = d.open; }));
+  on('plsIniciar', 'click', async ev => {
+    ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
+    const { m, pos } = await marcarFuro(p, 'inicio');
+    montarPlanos();
+    avisoPlano('plsAviso', ehNumero(m.dist) && m.dist > LIMITE_DIST_CAMPO ? 'erro' : 'ok', textoMarcaFuro('inicio', m, pos));
+  });
+  on('plsReiniciar', 'click', () => { REINICIO_A_CONFIRMAR = p.id; montarPlanos(); });
+  on('plsReiniciarNao', 'click', () => { REINICIO_A_CONFIRMAR = null; montarPlanos(); });
+  on('plsReiniciarSim', 'click', async ev => {
+    ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
+    const { m, pos } = await reiniciarFuro(p);
+    REINICIO_A_CONFIRMAR = null; abertoCampo(p).campo = true;
+    montarPlanos();
+    avisoPlano('plsAviso', ehNumero(m.dist) && m.dist > LIMITE_DIST_CAMPO ? 'erro' : 'ok', textoMarcaFuro('inicio', m, pos).replace('Furo iniciado', 'Furo reiniciado'));
+  });
   on('plsFinalizar', 'click', async ev => {
     ev.target.disabled = true; avisoPlano('plsAviso', '', 'Buscando a posição…');
     const { m, pos } = await marcarFuro(p, 'fim');
