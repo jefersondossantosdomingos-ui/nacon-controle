@@ -901,6 +901,14 @@ details.pl-etapa[open] > summary.pl-etapa-cab{margin-bottom:8px;} details.pl-eta
 .nsl.mct .gt{font-size:8pt; font-weight:700; text-align:center; margin-bottom:1mm;}
 .nsl.mct svg{width:100%; height:auto;}
 .nsl.mct .mct-res td{font-size:9pt; padding:1.2mm;}
+.nsl.mct table.g.mct-t td{font-size:6.3pt; line-height:1.2; padding:.35mm .6mm; height:auto; white-space:normal; overflow:visible; text-overflow:clip;}
+.nsl.mct table.g.mct-leit td{font-size:6.6pt;}
+.nsl.mct table.g.mct-t tr.tt td{font-size:6.6pt;}
+.nsl.mct .mct-par{grid-template-columns:1fr 1fr; gap:2mm; margin:1.5mm 0;}
+.nsl.mct .mct-par3{gap:2mm; margin:1mm 0;}
+.nsl.mct .mct-coef td.r{width:42%;}
+.nsl.mct .mct-coef tr.mct-grupo td{font-size:8pt; padding:1mm .6mm;}
+.nsl.mct .gt{font-size:7pt; margin-bottom:.5mm;}
 .nsl .cx{border:.6px solid var(--tinta); margin-bottom:2mm;}
 .nsl .cx .ct{text-align:center; font-size:6.2pt; border-bottom:.6px solid var(--tinta); padding:.4mm; white-space:normal;}
 .nsl .cx .cv{text-align:center; padding:1mm 0;} .nsl .cx .cv b{font-size:10pt; font-style:italic;}
@@ -12621,6 +12629,7 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   .q.op{height:auto;min-height:9mm;display:flex;flex-wrap:wrap;align-items:center;gap:1mm 3.2mm;padding:1.2mm 2mm;font-size:9.5pt}
   .q.op i{font-style:normal;display:inline-flex;align-items:center;gap:1.2mm;white-space:nowrap}
   .q.op .cx{display:inline-block;width:4.2mm;height:4.2mm;border:0.45mm solid #000;text-align:center;font:700 9pt/4mm Arial}
+  .q.op .cx{position:relative;overflow:visible} .q.op .cx > span{position:absolute;inset:-.6mm 0 0 0;display:flex;align-items:center;justify-content:center;padding:0 !important;font-size:13pt !important;transform:none}
   .q.op .outro{flex:1;min-width:22mm;border-bottom:0.3mm solid #000;height:5mm;display:inline-block}
   .compacta .q.op,.densa .q.op{height:auto;min-height:7mm}
   .q.op span{display:inline;font-size:inherit;font-weight:400;margin:0} .q.op span.outro{display:inline-block}
@@ -13115,7 +13124,12 @@ const ABAS_SO_SALVAR = ['slident'];
 
 function voltarRelatorioInteiro() { if (FOLHAS_SO) { FOLHAS_SO = null; atualizar(); } }
 
-function gerarPdfDaAba(aba) {
+async function gerarPdfDaAba(aba) {
+  // boletim de sondagem: o registro fotográfico do furo vai junto — espera as fotos (já vêm lidas ao abrir a aba)
+  if (['slbol', 'slident'].includes(aba) && estado.modo === 'slab' && typeof carregarFotosBol === 'function' && estado.slab && estado.slab.plano) {
+    const p = typeof pontoDoVinculo === 'function' ? pontoDoVinculo(estado.slab.plano) : null;
+    if (p) await Promise.race([carregarFotosBol(p), new Promise(r => setTimeout(r, 8000))]);
+  }
   FOLHAS_SO = FOLHAS_DA_ABA_CS[aba] || null;
   atualizar();
   // no celular a impressão não segura o script: o relatório inteiro volta quando a impressão
@@ -13591,7 +13605,7 @@ function cfgSlabPadrao() {
 function novoSlab(cfg = cfgSlabPadrao()) {
   return {
     cfg,
-    ident: { cliente: '', prefixo: '', os: '', estudo: '', local: '', laboratoristas: '', registroComp: '', energia: 'NORMAL',
+    ident: { cliente: '', prefixo: '', os: '', estudo: '', local: '', laboratoristas: '', registroComp: '', energia: 'NORMAL', lab: {},
              dataSed: '', horaSed: '', dataPic: '', dataLim: '', dataComp: '', dataCbr: '', cor: '', descricao: '' },
     hig: [{ capsula: '', umido: null, seco: null }, { capsula: '', umido: null, seco: null }],
     totalAr: null, grossos: nulosSl(7), parcialUmida: 120, finos: nulosSl(7),
@@ -13916,6 +13930,7 @@ function montarSlab() {
   if (!s || !$('slIdent')) return;
   if (!s.insitu) s.insitu = insituVazio();
   if (!s.mct && typeof mctVazio === 'function') s.mct = mctVazio();
+  s.ident.lab = s.ident.lab || {};
   const cfg = s.cfg, m = estado.medicao;
 
   /* ---------- IDENTIFICAÇÃO ---------- */
@@ -13958,7 +13973,7 @@ function montarSlab() {
 
   /* ---------- GRANULOMETRIA ---------- */
   const G = SLAB.PENEIRAS_GROSSO, F = SLAB.PENEIRAS_FINO;
-  $('slGranul').innerHTML = cartaoRascunho('slgranul') + `
+  $('slGranul').innerHTML = cartaoRascunho('slgranul') + labAbaSl('granul') + `
     <div class="card">
       <h2>1 · Umidade higroscópica <span class="tag">DNIT 459/2025-ME</span></h2>
       <div class="grid3">${cabSl('dataEnsaio', 'Data de execução', 'date')}</div>
@@ -14004,7 +14019,7 @@ function montarSlab() {
 
   /* ---------- SEDIMENTAÇÃO E MASSA ESPECÍFICA ---------- */
   const semSed = s.plano && s.plano.ensaios && !s.plano.ensaios.sed;
-  $('slSed').innerHTML = cartaoRascunho('slsed') + (semSed ? `<div class="aviso agenda"><span class="ico">i</span><span>O plano <b>não pede sedimentação</b> para o ${atr(s.plano.st)} — lance só a massa específica real (se o laboratório fizer) ou deixe a aba em branco.</span></div>` : '') + `
+  $('slSed').innerHTML = cartaoRascunho('slsed') + labAbaSl('sed') + (semSed ? `<div class="aviso agenda"><span class="ico">i</span><span>O plano <b>não pede sedimentação</b> para o ${atr(s.plano.st)} — lance só a massa específica real (se o laboratório fizer) ou deixe a aba em branco.</span></div>` : '') + `
     <div class="card">
       <h2>Sedimentação <span class="tag">DNIT 459/2025-ME</span></h2>
       <div class="grid4">
@@ -14043,7 +14058,7 @@ function montarSlab() {
   const linL = (lista, rot, campo, passo = '0.01') => `<tr><td class="cap">${rot}</td>${P5SL.map(i => `<td data-rot="${i + 1}">${
     campo === 'capsula' ? capSl(`${lista}.${i}.capsula`) : nSl(`${lista}.${i}.${campo}`, passo)}</td>`).join('')}</tr>`;
   const linC = (rot, id) => `<tr class="calc"><td class="cap">${rot}</td>${P5SL.map(i => `<td class="num" id="${id}${i}">—</td>`).join('')}</tr>`;
-  $('slLim').innerHTML = cartaoRascunho('sllim') + `
+  $('slLim').innerHTML = cartaoRascunho('sllim') + labAbaSl('lim') + `
     <div class="card">
       <h2>Limite de liquidez <span class="tag">DNER-ME 122/94</span></h2>
       <div class="grid3">
@@ -14101,7 +14116,7 @@ function montarSlab() {
   /* ---------- COMPACTAÇÃO ---------- */
   const linP = (rot, html) => `<tr><td class="cap">${rot}</td>${P5SL.map(i => `<td data-rot="Ponto ${i + 1}">${html(i)}</td>`).join('')}</tr>`;
   const linPc = (rot, id, forte) => `<tr class="calc"><td class="cap">${rot}</td>${P5SL.map(i => `<td class="num${forte ? ' forte' : ''}" id="${id}${i}">—</td>`).join('')}</tr>`;
-  $('slComp').innerHTML = cartaoRascunho('slcomp') + `
+  $('slComp').innerHTML = cartaoRascunho('slcomp') + labAbaSl('comp') + `
     <div class="card">
       <h2>Ensaio de compactação <span class="tag">DNIT 164/2013-ME</span></h2>
       <div class="grid4">
@@ -14141,7 +14156,7 @@ function montarSlab() {
   /* ---------- ISC ---------- */
   const prensas = (cfg.prensas || []).map(p => [p.numero, atr(`${p.numero} — ${p.nome || 'prensa'} (K ${fmt(p.k, 5)})`)]);
   const linI = (rot, html) => `<tr><td class="cap">${rot}</td>${P5SL.map(i => `<td data-rot="Ponto ${i + 1}">${html(i)}</td>`).join('')}</tr>`;
-  $('slCbr').innerHTML = cartaoRascunho('slcbr') + `
+  $('slCbr').innerHTML = cartaoRascunho('slcbr') + labAbaSl('cbr') + `
     <div class="card">
       <h2>ISC — expansão <span class="tag">DNIT 172/2016-ME</span></h2>
       <div class="grid4">
@@ -14252,8 +14267,8 @@ function folhasDoLaudoSl(r) {
   const abas = abasSlabDoPlano(r), pt = r && !r.erro ? partesSlab(r) : {};
   const tem = { f1: !abas || ['slgranul', 'slsed', 'sllim'].some(a => abas.has(a)) || pt.granul || pt.sed || pt.lim,
     f2: !abas || ['slcomp', 'slcbr'].some(a => abas.has(a)) || pt.comp || pt.isc, in: !!(r && r.insitu && ehNumero(r.insitu.gh)) };
-  tem.m1 = tem.m2 = tem.m3 = typeof mctPreenchido === 'function' && mctPreenchido(r);
-  const lista = ['f1', 'f2', 'in', 'm1', 'm2', 'm3'].filter(k => tem[k]);
+  tem.m1 = typeof mctPreenchido === 'function' && mctPreenchido(r);      // classificação MCT: uma folha só
+  const lista = ['f1', 'f2', 'in', 'm1'].filter(k => tem[k]);
   return { tem, num: k => `${String(lista.indexOf(k) + 1).padStart(2, '0')}/${String(lista.length).padStart(2, '0')}` };
 }
 
@@ -14269,7 +14284,7 @@ function htmlAbaInsituSl() {
       <div class="grid4">
         <div><label>Data de execução</label>${dSl('insitu.data')}</div>
         <div><label>Profundidade / posição</label>${tSl('insitu.prof', 'Ex.: 0,30 m', false)}</div>
-        <div><label>Operador</label>${tSl('insitu.operador')}</div>
+        <div><label>Laboratorista / operador que fez</label>${tSl('insitu.operador')}</div>
         <div><label>Observações</label>${tSl('insitu.obs', '', false)}</div>
       </div>
     </div>
@@ -14524,7 +14539,7 @@ function svgPlastSl(r, W = 260, H = 170, fonte = 8) {
     x: { min: 0, max: 120, passo: 20, casas: 1, titulo: 'LL (%)' },
     y: { min: 0, max: 60, passo: 10, casas: 0, titulo: 'IP (%)' },
     guias: [{ x1: 20, y1: 0, x2: 100, y2: 0.73 * 80, largura: 1.2 }, { x1: 50, x2: 50, y1: 0, y2: 60, largura: 1 }],
-    series: [{ pts: pt, marcas: true, linha: false, raio: 2.8, cor: '#999' }],
+    series: [{ pts: pt, marcas: true, linha: false, raio: 3.2, cor: VERM }],
   });
 }
 
@@ -14532,22 +14547,15 @@ function svgCompSl(r, W = 380, H = 230, fonte = 8) {
   const C = r.comp, pts = C.pontos.map(p => [p.umidade, p.gs]).filter(p => ehNumero(p[0]) && ehNumero(p[1])).sort((a, b) => a[0] - b[0]);
   const fx = faixaNum(pts.map(p => p[0]), 0.6, 1) || [10, 20];
   const fy = faixaNum([...pts.map(p => p[1]), C.dmax], 0.012, 0.02) || [1.6, 1.8];
-  const sat = [['s100', 'S=100%'], ['s90', 'S=90%'], ['s80', 'S=80%']].map(([k, rot], i) => {
-    const f = C.saturacao[k], ws = Array.from({ length: 41 }, (_, j) => fx[0] + (fx[1] - fx[0]) * j / 40);
-    const linha = ws.map(w => [w, f(w)]).filter(p => ehNumero(p[1]));
-    const dentro = linha.filter(p => p[1] >= fy[0] && p[1] <= fy[1]);
-    const lab = dentro.length ? dentro[Math.floor(dentro.length * 0.5)] : null;
-    return { serie: { pts: linha, tracejado: ['8 3 2 3', '6 3', '2 2'][i], largura: 0.9, cor: '#555' }, lab, rot };
-  });
+  // sem as linhas de saturação (pedido da NACON, 26/11)
   return svgPlotSl(W, H, {
-    fonte, margem: { l: 40, t: 8, b: 24 },
-    x: { min: fx[0], max: fx[1], passo: fx[1] - fx[0] > 10 ? 2 : 1, casas: 1 },
+    fonte, margem: { l: 40, t: 8, b: 26 },
+    x: { min: fx[0], max: fx[1], passo: fx[1] - fx[0] > 10 ? 2 : 1, casas: 1, titulo: 'Umidade (%)' },
     y: { min: fy[0], max: fy[1], passo: 0.02, casas: 3, titulo: 'Peso Esp. Seco (g/cm³)' },
-    series: [...sat.map(s => s.serie), { pts, suave: true, marcas: true, raio: 3, largura: 1.6, rotulos: q => fmt(q[1], 3) }],
+    series: [{ pts, suave: true, marcas: true, raio: 3, largura: 1.6, rotulos: q => fmt(q[1], 3) }],
     guias: ehNumero(C.dmax) && ehNumero(C.hot) ? [{ x1: C.hot, x2: C.hot, y1: -Infinity, y2: C.dmax, cor: VERM, tracejado: '5 3', largura: 1.5 },
       { x1: -Infinity, x2: C.hot, y1: C.dmax, y2: C.dmax, cor: VERM, tracejado: '5 3', largura: 1.5 }] : [],
-    textos: [...sat.filter(s => s.lab).map(s => ({ x: s.lab[0], y: s.lab[1], t: s.rot, tam: fonte - 1.5, dx: 2 })),
-      ...(ehNumero(C.dmax) && ehNumero(C.hot) ? [{ x: C.hot, y: C.dmax, t: '●', cor: VERM, anc: 'middle', dy: 3.5, tam: fonte + 3 },
+    textos: [...(ehNumero(C.dmax) && ehNumero(C.hot) ? [{ x: C.hot, y: C.dmax, t: '●', cor: VERM, anc: 'middle', dy: 3.5, tam: fonte + 3 },
         { x: C.hot, y: C.dmax, t: fmt(C.dmax, 3), dy: -5, anc: 'middle' }] : [])],
   });
 }
@@ -14590,9 +14598,9 @@ function svgPenSl(r, i, W = 140, H = 120, fonte = 7) {
   const passo = ymax > 1.5 ? 0.5 : ymax > 0.6 ? 0.2 : 0.2;
   const top = Math.ceil(ymax / passo) * passo;
   return svgPlotSl(W, H, {
-    fonte, margem: { l: 22, t: 6, b: 14, r: 4 },
-    x: { min: 0, max: 12.7, marcas: [2.54, 5.08], rotulo: v => fmt(v, 2) },
-    y: { min: 0, max: top, passo, casas: 1 },
+    fonte: fonte - 0.5, margem: { l: 28, t: 6, b: 22, r: 4 },
+    x: { min: 0, max: 12.7, marcas: [2.54, 5.08], rotulo: v => fmt(v, 2), titulo: 'Penetração (mm)' },
+    y: { min: 0, max: top, passo, casas: 1, titulo: 'Pressão (kgf/cm²)' },
     series: [{ pts, marcas: true, raio: 1.8, largura: 1 }],
   });
 }
@@ -14619,13 +14627,24 @@ function cabecalhoSl() {
 const barraSl = (norma, titulo, registro, data) => `<table class="sl-barra"><colgroup><col style="width:34mm"><col style="width:58mm"><col style="width:22mm"><col style="width:28mm"><col style="width:24mm"><col style="width:28mm"></colgroup>
   <tr><td class="n${norma.length > 18 ? ' longa' : ''}">${norma}</td><td class="t">${titulo}</td><td class="k">Registro ensaio:</td><td class="v">${esc(registro || '')}</td><td class="k">Data execução:</td><td class="v">${dataBrSl(data)}</td></tr></table>`;
 
-function rodapeSl(folha, prescricoes = null) {
+/* Quem fez cada ensaio (26/11): um campo "Laboratorista" em cada aba; a folha do laudo leva o nome de quem fez
+   os ensaios dela. Em branco, vale o laboratorista do ensaio (Identificação). */
+function labAbaSl(k) {
+  return `<div class="card" style="padding-top:12px;padding-bottom:12px"><div class="grid3"><div><label>Laboratorista que fez este ensaio</label>${tSl('ident.lab.' + k, estado.medicao.laboratorista || 'NOME')}</div></div></div>`;
+}
+/** Os nomes de quem fez os ensaios de uma folha (sem repetir); nenhum escrito → o laboratorista do ensaio. */
+function labsDaFolhaSl(chaves) {
+  const s = estado.slab, l = (s.ident && s.ident.lab) || {};
+  const nomes = [...new Set(chaves.map(k => String((typeof k === 'function' ? k() : l[k]) || '').trim().toUpperCase()).filter(Boolean))];
+  return nomes.length ? nomes : [String(estado.medicao.laboratorista || '').trim().toUpperCase()].filter(Boolean);
+}
+function rodapeSl(folha, prescricoes = null, quem = null) {
   const s = estado.slab, cfg = s.cfg, m = estado.medicao;
-  const labs = (s.ident.laboratoristas || cfg.laboratoristas || '').split(/\n|\s·\s/).filter(Boolean);
+  const labs = quem && quem.length ? quem : (s.ident.laboratoristas || cfg.laboratoristas || '').split(/\n|\s·\s/).filter(Boolean);
   const resp = m.engenheiro || cfg.responsavel || '';
   return `<table class="sl-rod"><colgroup><col style="width:88mm"><col style="width:26mm"><col style="width:26mm"><col style="width:54mm"></colgroup><tr>
     <td><b>Prescrições:</b><br>${(prescricoes || cfg.prescricoes || []).map(esc).join('<br>')}</td>
-    <td><b>Laboratoristas :</b><br>${labs.map(esc).join('<br>')}</td>
+    <td><b>${labs.length > 1 ? 'Laboratoristas' : 'Laboratorista'}:</b><br>${labs.map(esc).join('<br>')}</td>
     <td class="fo"><b>Folha:</b><div>${folha}</div></td>
     <td class="rs"><b>Resp. Técnico:</b><div class="ass">${esc(resp)}${!m.engenheiro && cfg.crea ? '<br>' + esc(cfg.crea) : ''}</div></td></tr></table>`;
 }
@@ -14729,7 +14748,7 @@ function folhaSlab1(pacote, pagina, total) {
     <div class="sl-col2"><div class="esq">${ll}</div><div class="dir">${lp}</div></div>
     <div class="sl-graflim"><div class="g1"><div class="tg">GRÁFICO DO LIMITE DE LIQUIDEZ</div>${svgLLSl(r, 250, 165, 8)}</div>
       <div class="g1"><div class="tg">GRÁFICO DO LIMITE DE PLASTICIDADE</div>${svgPlastSl(r, 250, 165, 8)}</div><div class="g2">${resLim}</div></div>
-    ${rodapeSl(folhasDoLaudoSl(r).num('f1'))}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('f1'), null, labsDaFolhaSl(['granul', 'sed', 'lim']))}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
 }
 
@@ -14782,7 +14801,7 @@ function folhaSlab2(pacote, pagina, total) {
     ${comp}${graf}
     ${barraSl('DNIT 172/2016-ME', 'CBR', m.registro, id.dataCbr || id.dataComp)}
     <div class="sl-cbr">${P5SL.map(bloco).join('')}</div>
-    ${rodapeSl(folhasDoLaudoSl(r).num('f2'))}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('f2'), null, labsDaFolhaSl(['comp', 'cbr']))}`;
   return [`<div class="folha nsl" data-cheia="1">${corpo}</div>`];
 }
 
@@ -14816,7 +14835,7 @@ function folhaSlabInsitu(pacote) {
       ${caixa('Grau de Compactação', ehNumero(N.gc) ? nf(N.gc, 1) : '—', '%')}${caixa('Desvio da umidade ótima', ehNumero(N.dw) ? (N.dw >= 0 ? '+' : '') + nf(N.dw, 1) : '—', 'p.p.')}</div></div>
     ${I.obs ? `<table class="g"><tr><td class="r" style="width:34%">Observações</td><td>${esc(I.obs)}</td></tr></table>` : ''}
     ${ehNumero(N.gc) ? `<p style="font-size:7.5pt;margin:1.5mm 0">Grau de compactação em relação ao peso específico seco máximo de ${nf(r.comp.dmax, 3)} g/cm³ e umidade ótima de ${nf(r.comp.hot, 1)} % (ensaio de compactação deste registro).</p>` : ''}
-    ${rodapeSl(folhasDoLaudoSl(r).num('in'))}`;
+    ${rodapeSl(folhasDoLaudoSl(r).num('in'), null, labsDaFolhaSl([() => estado.slab.insitu.operador]))}`;
   return [`<div class="folha nsl">${corpo}</div>`];
 }
 
@@ -14840,6 +14859,8 @@ const CAB_SL = COM_PLANOS_SL ? [
   ['Laboratorista', 'laboratorista', 'cab.laboratorista', 'texto', _slc('laboratorista')],
 ];
 const linSl = (rot, chave, tipo = 'num', un) => [rot, i => `${chave(i)}`, tipo, un, i => _sl(chave(i))];
+/** Cabeçalho da ficha com o laboratorista daquela aba (o nome escrito na ficha vai para quem fez aquele ensaio). */
+const cabLabSl = caminho => CAB_SL.map(c => c[1] === 'laboratorista' ? [c[0], c[1], c[2], c[3], _sl(caminho)] : c);
 const SIGLA_SL = (typeof MARCA !== 'undefined' && MARCA.siglaFichas) || 'RASC';
 
 /* Boletins (trado e SPT): o que tem opção é só marcar X — e a caixa "Outro" para escrever só quando não houver a opção */
@@ -14884,12 +14905,12 @@ const FICHAS_SLAB = [
           c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'umidade'][c]}`)]) },
     ] },
   // densidade in situ do furo: a ficha muda com o método escolhido na aba (cilindro de cravação ou frasco de areia)
-  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8', titulo: 'Massa específica in situ — cilindro de cravação (NBR 9813)', cabs: CAB_SL, repeteCab: ['laboratorista'],
+  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8', titulo: 'Massa específica in situ — cilindro de cravação (NBR 9813)', cabs: cabLabSl('insitu.operador'), repeteCab: ['laboratorista'],
     quando: () => !(estado.slab && estado.slab.insitu && estado.slab.insitu.metodo === 'frasco'),
     nota: 'Cilindro de cravação: peso e volume costumam estar gravados no próprio cilindro. Se a ficha trouxer só diâmetro e altura, ponha nesses campos.',
     blocos: [
       { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'insData', _sl('insitu.data'), 'data'),
-        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto'), fAt('Operador', 'insOper', _sl('insitu.operador'), 'texto', 2)] },
+        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto', 2)] },
       { tipo: 'campos', titulo: 'Cilindro de cravação', campos: [fAt('Cilindro nº', 'insCil', _sl('insitu.cil.numero'), 'texto'),
         fAt('Peso do cilindro (g)', 'insCilPeso', _sl('insitu.cil.peso')), fAt('Volume do cilindro (cm³)', 'insCilVol', _sl('insitu.cil.volume')),
         fAt('Diâmetro interno (cm)', 'insCilD', _sl('insitu.cil.diametro')), fAt('Altura (cm)', 'insCilH', _sl('insitu.cil.altura')),
@@ -14899,11 +14920,11 @@ const FICHAS_SLAB = [
         linSl('Cápsula + solo seco (g)', i => `insitu.umid.${i}.seco`)] },
       { tipo: 'campos', titulo: 'Observações', campos: [fAt('Observações', 'insObs', _sl('insitu.obs'), 'texto', 3)] },
     ] },
-  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8A', titulo: 'Massa específica in situ — frasco de areia (NBR 7185)', cabs: CAB_SL, repeteCab: ['laboratorista'],
+  { aba: 'slinsitu', modo: 'slab', codigo: SIGLA_SL + '-L8A', titulo: 'Massa específica in situ — frasco de areia (NBR 7185)', cabs: cabLabSl('insitu.operador'), repeteCab: ['laboratorista'],
     quando: () => !!(estado.slab && estado.slab.insitu && estado.slab.insitu.metodo === 'frasco'),
     blocos: [
       { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'insData', _sl('insitu.data'), 'data'),
-        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto'), fAt('Operador', 'insOper', _sl('insitu.operador'), 'texto', 2)] },
+        fAt('Profundidade / posição', 'insProf', _sl('insitu.prof'), 'texto', 2)] },
       { tipo: 'campos', titulo: 'Frasco de areia', campos: [fAt('Frasco nº', 'insFr', _sl('insitu.fr.numero'), 'texto'),
         fAt('Densidade da areia (g/cm³)', 'insFrDens', _sl('insitu.fr.densAreia')), fAt('Areia no cone (g)', 'insFrCone', _sl('insitu.fr.cone')),
         fAt('Frasco + areia antes (g)', 'insFrAntes', _sl('insitu.fr.antes')), fAt('Frasco + areia depois (g)', 'insFrDepois', _sl('insitu.fr.depois')),
@@ -14913,7 +14934,7 @@ const FICHAS_SLAB = [
         linSl('Cápsula + solo seco (g)', i => `insitu.umid.${i}.seco`)] },
       { tipo: 'campos', titulo: 'Observações', campos: [fAt('Observações', 'insObs', _sl('insitu.obs'), 'texto', 3)] },
     ] },
-  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, repete: ['parcial'], repeteCab: ['laboratorista'], titulo: 'Solos — umidade higroscópica e peneiramento', cabs: CAB_SL,
+  { aba: 'slgranul', modo: 'slab', codigo: SIGLA_SL + '-L3', compacta: true, repete: ['parcial'], repeteCab: ['laboratorista'], titulo: 'Solos — umidade higroscópica e peneiramento', cabs: cabLabSl('ident.lab.granul'),
     blocos: [
       { tipo: 'campos', titulo: 'Amostra', campos: [fAt('Data de execução', 'data', _slc('dataEnsaio'), 'data'),
         fAt('Amostra total seca ao ar (g)', 'totalAr', _sl('totalAr')), fAt('Amostra parcial úmida (g)', 'parcial', _sl('parcialUmida'))] },
@@ -14925,7 +14946,7 @@ const FICHAS_SLAB = [
       { tipo: 'grade', par: true, titulo: 'Peneiramento fino — retido (g)', colunas: ['Retido (g)'], idx: [0],
         linhas: SLAB.PENEIRAS_FINO.map((p, k) => [`${p[0]} · ${p[1]}`, () => `finos.${k}`, 'num', 'g', () => _sl(`finos.${k}`)]) },
     ] },
-  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L4', compacta: true, densa: true, repeteCab: ['laboratorista'], titulo: 'Solos — sedimentação e massa específica real', cabs: CAB_SL,
+  { aba: 'slsed', modo: 'slab', codigo: SIGLA_SL + '-L4', compacta: true, densa: true, repeteCab: ['laboratorista'], titulo: 'Solos — sedimentação e massa específica real', cabs: cabLabSl('ident.lab.sed'),
     blocos: [
       { tipo: 'campos', titulo: 'Sedimentação', campos: [fAt('Data de início', 'dataSed', _sl('ident.dataSed'), 'data'),
         fAt('Hora de início (hh:mm)', 'horaSed', _sl('ident.horaSed'), 'texto')] },
@@ -14937,7 +14958,7 @@ const FICHAS_SLAB = [
         linSl('Picnômetro nº', i => `pic.itens.${i}.numero`, 'texto'), linSl('Massa da amostra (g)', i => `pic.itens.${i}.amostra`),
         linSl('Picn. + amostra + água — P3 (g)', i => `pic.itens.${i}.p3`)] },
     ] },
-  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L5', repeteCab: ['laboratorista'], titulo: 'Solos — limites de liquidez e plasticidade', cabs: CAB_SL,
+  { aba: 'sllim', modo: 'slab', codigo: SIGLA_SL + '-L5', repeteCab: ['laboratorista'], titulo: 'Solos — limites de liquidez e plasticidade', cabs: cabLabSl('ident.lab.lim'),
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataLim', _sl('ident.dataLim'), 'data'),
         fAt('Cor da amostra', 'cor', _sl('ident.cor'), 'texto')] },
@@ -14948,7 +14969,7 @@ const FICHAS_SLAB = [
         linSl('Cápsula nº', i => `lp.${i}.capsula`, 'texto'), linSl('Cápsula + solo úmido (g)', i => `lp.${i}.umido`),
         linSl('Cápsula + solo seco (g)', i => `lp.${i}.seco`)] },
     ] },
-  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L6', compacta: true, densa: true, repete: ['energia'], repeteCab: ['laboratorista'], titulo: 'Solos — compactação (5 pontos)', cabs: CAB_SL,
+  { aba: 'slcomp', modo: 'slab', codigo: SIGLA_SL + '-L6', compacta: true, densa: true, repete: ['energia'], repeteCab: ['laboratorista'], titulo: 'Solos — compactação (5 pontos)', cabs: cabLabSl('ident.lab.comp'),
     blocos: [
       { tipo: 'campos', titulo: 'Execução', campos: [fAt('Data de execução', 'dataComp', _sl('ident.dataComp'), 'data'),
         fAt('Energia', 'energia', _sl('ident.energia'), 'texto')] },
@@ -14960,7 +14981,7 @@ const FICHAS_SLAB = [
         linhas: P5SL.flatMap(i => [0, 1, 2].map(j => [`Ponto ${i + 1} · cáps. ${j + 1}`, c => `comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`, 'num', '',
           c => _sl(`comp.${i}.caps.${j}.${['capsula', 'umido', 'seco'][c]}`)])) },
     ] },
-  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L7', repete: ['prensa'], repeteCab: ['laboratorista'], titulo: 'Solos — ISC (expansão e penetração)', cabs: CAB_SL,
+  { aba: 'slcbr', modo: 'slab', codigo: SIGLA_SL + '-L7', repete: ['prensa'], repeteCab: ['laboratorista'], titulo: 'Solos — ISC (expansão e penetração)', cabs: cabLabSl('ident.lab.cbr'),
     blocos: [
       { tipo: 'campos', titulo: 'Prensa e imersão', campos: [fAt('Prensa nº', 'prensa', _sl('cbr.prensa'), 'texto'),
         fAt('Início da imersão', 'dataCbr', _sl('ident.dataCbr'), 'data')] },
@@ -15017,6 +15038,9 @@ function resumoSlab(c) {
     hrb: q.hrb.nome || '', sucs: q.sucs.nome || '', ig: q.ig, ll: q.lim.np ? null : q.lim.LL, lp: q.lim.np ? null : q.lim.LP,
     ip: q.lim.np ? null : q.lim.IP, np: q.lim.np, densReal: q.me.gs ?? null, umidadeHigro: q.hig.media ?? null,
     passantes: [...q.gr.grosso.slice(2), ...q.gr.fino].map(x => x.passa ?? null),
+    passa14: [...q.gr.grosso, ...q.gr.fino].map(x => x.passa ?? null),     // 2" … nº 200 (quadro resumo da NACON)
+    fr6: { pedregulho: q.fr.pedregulho ?? null, grossa: q.fr.grossa ?? null, media: q.fr.media ?? null, fina: q.fr.fina ?? null, silte: q.fr.silte ?? null, argila: q.fr.argila ?? null },
+    temSed: !!(partesSlab(q).sed),
     pedregulho: q.fr.pedregulho ?? null, areia: q.fr.areia ?? null, silte: q.fr.silte ?? null, argila: q.fr.argila ?? null,
     energia: id.energia || '', cliente: id.cliente || '', estudo: id.estudo || '', local: id.local || '', os: [id.prefixo, id.os].filter(Boolean).join(' / '),
     nomeSolo: q.descricao || '',
@@ -15224,7 +15248,7 @@ function htmlAbaMctSl() {
       <h2>Compactação Mini-MCV <span class="tag">DNER-ME 258/94 · série simplificada</span></h2>
       <div class="grid4">
         <div><label>Data de execução</label>${dSl('mct.data')}</div>
-        <div><label>Operador</label>${tSl('mct.operador')}</div>
+        <div><label>Laboratorista que fez este ensaio</label>${tSl('mct.operador', estado.medicao.laboratorista || 'NOME')}</div>
         <div><label>Constante Ka — Ac (mm)</label>${nSl('mct.ka', '0.01')}</div>
         <div><label>Diâmetro do cilindro (cm)</label>${nSl('mct.diametro', '0.01')}</div>
       </div>
@@ -15389,77 +15413,58 @@ const OBS_MCT = 'Classificação MCT com uso da série simplificada — a série
 function folhasSlabMct(pacote) {
   const r = pacote && pacote.slab; if (!r || r.erro || !mctPreenchido(r)) return [];
   const q = r.mct, M = estado.slab.mct, m = estado.medicao, K = [0, 1, 2, 3, 4], fl = folhasDoLaudoSl(r);
-  const lin = (rot, f, cls = 'c') => `<tr><td class="r">${rot}</td>${K.map(i => tdv(f(i), cls)).join('')}</tr>`;
-  const cols5 = `<colgroup><col style="width:30%">${K.map(() => '<col style="width:14%">').join('')}</colgroup>`;
-  const rod = k => rodapeSl(fl.num(k), PRESCR_MCT);
+  const cols = `<colgroup><col style="width:30%">${K.map(() => '<col style="width:14%">').join('')}</colgroup>`;
+  const colsL = `<colgroup><col style="width:16%">${K.map(() => '<col style="width:16.8%">').join('')}</colgroup>`;
+  const lin = (rot, f, b = false) => `<tr><td class="r">${b ? `<b>${rot}</b>` : rot}</td>${K.map(i => tdv(b ? `<b>${f(i)}</b>` : f(i), 'c')).join('')}</tr>`;
   const cabCp = `<tr><td class="r"><b>Corpo de prova</b></td>${K.map(i => `<td class="c"><b>CP ${i + 1}</b></td>`).join('')}</tr>`;
-  const barra = t => barraSl('DNER-ME 258/94', t, m.registro, M.data);
-  // folha 1: Mini-MCV
-  const cpTab = `<table class="g">${cols5}<tr class="tt"><td colspan="6">CORPOS DE PROVA — COMPACTAÇÃO MINI-MCV</td></tr>${cabCp}
-    ${lin('Cilindro', i => esc(M.cps[i].cilindro))}${lin('Água acrescentada (g)', i => nf(M.cps[i].agua, 0))}
-    ${lin('Peso solo úmido + tara (g)', i => nf(M.cps[i].umidoTara, 2))}${lin('Tara (g)', i => nf(q.cps[i].tara, 2))}
-    ${lin('Peso solo úmido (g)', i => nf(q.cps[i].umido, 2))}${lin('Peso solo seco compactado (g)', i => nf(q.cps[i].seco, 2))}
-    ${lin('Cápsula n.º', i => esc(M.cps[i].capsula))}${lin('Cápsula + solo úmido (g)', i => nf(M.cps[i].capUmido, 2))}
-    ${lin('Cápsula + solo seco (g)', i => nf(M.cps[i].capSeco, 2))}${lin('Peso da cápsula (g)', i => nf(q.cps[i].capT, 2))}
-    ${lin('Peso da água (g)', i => nf(q.cps[i].agua, 2))}${lin('Peso do solo seco (g)', i => nf(q.cps[i].secoCap, 2))}
-    <tr><td class="r"><b>Umidade (%)</b></td>${K.map(i => tdv(`<b>${nf(q.cps[i].w, 1)}</b>`, 'c')).join('')}</tr></table>`;
-  const sub = `<tr><td class="r">Ka = ${nf(q.ka, 2)} mm</td>${K.map(i => `<td class="c">Af = ${nf(q.cps[i].af, 2)}</td>`).join('')}</tr>`;
-  const cel = (c, n) => { const x = c.lidas.find(y => y.n === n); return x ? `${nf(x.L, 2)}<br>${nf(x.h, 2)} · ${nf(x.dh, 2)} · ${nf(x.meas, 3)}` : ''; };
-  const leit = `<table class="g mct-leit">${cols5}<tr class="tt"><td colspan="6">LEITURAS — leitura (mm) / altura (mm) · Δh (mm) · MEAS (g/cm³)</td></tr>${sub}
-    ${GOLPES_MCT.map(n => `<tr><td class="r">${n} golpe${n > 1 ? 's' : ''}</td>${K.map(i => tdv(cel(q.cps[i], n), 'c')).join('')}</tr>`).join('')}</table>`;
-  const f1 = `${cabecalhoSl()}${barra('ENSAIO DE COMPACTAÇÃO MINI-MCV')}${cpTab}${leit}
-    <p class="mct-obs"><b>Observação:</b> ${esc(OBS_MCT)}${M.obs ? '<br>' + esc(M.obs) : ''}</p>${rod('m1')}`;
-  // folha 2: c' e d'
+  // 1 · corpos de prova (o essencial: o resto das pesagens está na ficha)
+  const cp = `<table class="g mct-t">${cols}<tr class="tt"><td colspan="6">1 · COMPACTAÇÃO MINI-MCV (DNER-ME 258/94 — série simplificada)</td></tr>${cabCp}
+    ${lin('Cilindro · tara (g)', i => `${esc(M.cps[i].cilindro)}${ehNumero(q.cps[i].tara) ? ' · ' + nf(q.cps[i].tara, 2) : ''}`)}
+    ${lin('Solo úmido + tara (g)', i => nf(M.cps[i].umidoTara, 2))}${lin('Solo seco compactado (g)', i => nf(q.cps[i].seco, 2))}
+    ${lin('Cápsula · úmido · seco (g)', i => [esc(M.cps[i].capsula), nf(M.cps[i].capUmido, 2), nf(M.cps[i].capSeco, 2)].filter(Boolean).join(' · '))}
+    ${lin('Umidade (%)', i => nf(q.cps[i].w, 1), true)}</table>`;
+  // 2 · leituras: leitura / Δh / MEAS numa linha
+  const cel = (c, n) => { const x = c.lidas.find(y => y.n === n); return x ? `${nf(x.L, 2)} · ${nf(x.dh, 2)} · ${nf(x.meas, 3)}` : ''; };
+  const usados = GOLPES_MCT.filter(n => q.cps.some(c => c.lidas.some(x => x.n === n)));
+  const leit = `<table class="g mct-t mct-leit">${colsL}<tr class="tt"><td colspan="6">2 · LEITURAS — leitura (mm) · Δh (mm) · MEAS (g/cm³) — Ka = ${nf(q.ka, 2)} mm</td></tr>
+    ${usados.map(n => `<tr><td class="r">${n} golpe${n > 1 ? 's' : ''}</td>${K.map(i => tdv(cel(q.cps[i], n), 'c')).join('')}</tr>`).join('')}
+    ${lin('Af (mm) · n (Δh = 2 mm)', i => [nf(q.cps[i].af, 2), nf(q.cps[i].n2, 1)].filter(Boolean).join(' · '))}
+    ${lin('Mini-MCV = 10 log n', i => nf(q.cps[i].mcv, 1), true)}</table>`;
+  // 3 · perda por imersão
+  const pi = `<table class="g mct-t">${cols}<tr class="tt"><td colspan="6">3 · PERDA DE MASSA POR IMERSÃO (DNER-ME 256/94)</td></tr>
+    ${lin('Cápsula · tara (g)', i => `${esc(M.cps[i].piCap)}${ehNumero(q.cps[i].piTara) ? ' · ' + nf(q.cps[i].piTara, 2) : ''}`)}
+    ${lin('Saliente (cm) · massa seca saliente (g)', i => [nf(M.cps[i].saliente, 1), nf(q.cps[i].massaSal, 1)].filter(Boolean).join(' · '))}
+    ${lin('Desprendido + cáps. · desprendida (g)', i => [nf(M.cps[i].desprCap, 2), nf(q.cps[i].despr, 2)].filter(Boolean).join(' · '))}
+    ${lin('Fator de correção', i => nf(q.cps[i].fator, 1))}${lin('Perda por imersão PI (%)', i => nf(q.cps[i].pi, 1), true)}</table>`;
+  // 4 · coeficientes e grupo
   const cc = q.cc || {}, dd = q.dd || {};
-  const tabMcv = `<table class="g"><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><tr class="tt"><td colspan="3">TABELA MINI-MCV</td></tr>
-    <tr><td class="c"><b>Umidade (%)</b></td><td class="c"><b>Golpes n (Δh = 2 mm)</b></td><td class="c"><b>Mini-MCV = 10 log n</b></td></tr>
-    ${q.cps.filter(c => ehNumero(c.w)).map(c => `<tr>${tdv(nf(c.w, 1), 'c')}${tdv(nf(c.n2, 1), 'c')}${tdv(nf(c.mcv, 1), 'c')}</tr>`).join('')}</table>`;
-  const coefC = `<table class="g"><tr class="tt"><td colspan="4">COEFICIENTE c'</td></tr>
-    <tr><td class="c" colspan="4">c' = (Ai − Af) / (10 log Nf − 10 log Ni)${cc.manual ? ' — lido no gráfico' : ' — curva Mini-MCV = 10'}</td></tr>
-    <tr><td class="r">Ai (mm)</td>${tdv(nf(cc.ai, 2), 'c')}<td class="r">Ni</td>${tdv(nf(cc.ni, 0), 'c')}</tr>
-    <tr><td class="r">Af (mm)</td>${tdv(nf(cc.af, 2), 'c')}<td class="r">Nf</td>${tdv(nf(cc.nf, 0), 'c')}</tr>
-    <tr><td class="r"><b>c' =</b></td><td class="c" colspan="3"><b>${nf(q.cLinha, 2)}</b></td></tr></table>`;
-  const coefD = `<table class="g"><tr class="tt"><td colspan="${2 + q.c10.length}">COEFICIENTE d' — curva de compactação com 10 golpes</td></tr>
-    <tr><td class="r">Umidade (%)</td>${q.c10.map(p => tdv(nf(p[0], 1), 'c')).join('')}</tr><tr><td class="r">MEAS (g/cm³)</td>${q.c10.map(p => tdv(nf(p[1], 3), 'c')).join('')}</tr>
-    <tr><td class="c" colspan="${1 + q.c10.length}">d' = 1000 × (MEAS(f) − MEAS(i)) / (W(f) − W(i)) = 1000 × (${nf(dd.measF, 3)} − ${nf(dd.measI, 3)}) / (${nf(dd.wF, 1)} − ${nf(dd.wI, 1)})${dd.manual ? ' — lido no gráfico' : ''}</td></tr>
-    <tr><td class="r"><b>d' =</b></td><td class="c" colspan="${q.c10.length}"><b>${nf(q.dLinha, 2)} kg/m³</b></td></tr></table>`;
-  const f2 = `${cabecalhoSl()}${barra("DETERMINAÇÃO DOS COEFICIENTES c' E d'")}
-    <div class="mct-par"><div><div class="gt">Curvas de Mini-MCV</div>${svgDeformMct(q, 420, 260, 8)}</div><div>${tabMcv}${coefC}</div></div>
-    <div class="mct-par"><div><div class="gt">Curva de compactação com 10 golpes</div>${svgComp10Mct(q, 320, 210)}</div><div><div class="gt">Curvas de compactação</div>${svgCompVariosMct(q, 320, 210)}</div></div>
-    ${coefD}${rod('m2')}`;
-  // folha 3: PI, e', grupo
-  const piTab = `<table class="g">${cols5}<tr class="tt"><td colspan="6">DNER-ME 256/94 — PERDA DE MASSA POR IMERSÃO (PI)</td></tr>${cabCp}
-    ${lin('Teor de umidade (%)', i => nf(q.cps[i].w, 1))}${lin('Cápsula n.º', i => esc(M.cps[i].piCap))}
-    ${lin('Comprimento saliente (cm)', i => nf(M.cps[i].saliente, 1))}${lin('Volume saliente (cm³)', i => nf(q.cps[i].volSal, 1))}
-    ${lin('Massa de solo seco saliente (g)', i => nf(q.cps[i].massaSal, 1))}${lin('Solo seco desprendido + cápsula (g)', i => nf(M.cps[i].desprCap, 2))}
-    ${lin('Peso da cápsula (g)', i => nf(q.cps[i].piTara, 2))}${lin('Massa de solo seco desprendida (g)', i => nf(q.cps[i].despr, 2))}
-    ${lin('Fator de correção', i => nf(q.cps[i].fator, 1))}<tr><td class="r"><b>Perda por imersão (%)</b></td>${K.map(i => tdv(`<b>${nf(q.cps[i].pi, 1)}</b>`, 'c')).join('')}</tr></table>`;
-  const curvas = `<table class="g"><colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
-    <tr class="tt"><td colspan="4">MINI-MCV × ALTURA FINAL × PI</td></tr>
-    <tr><td class="c"><b>Umidade (%)</b></td><td class="c"><b>Mini-MCV</b></td><td class="c"><b>Af (mm)</b></td><td class="c"><b>PI (%)</b></td></tr>
-    ${q.cps.filter(c => ehNumero(c.w)).map(c => `<tr>${tdv(nf(c.w, 1), 'c')}${tdv(nf(c.mcv, 1), 'c')}${tdv(nf(c.af, 2), 'c')}${tdv(nf(c.pi, 1), 'c')}</tr>`).join('')}</table>`;
-  const crit = q.criterio === 'I' ? 'Critério I: Af < 48 mm (solo de alta densidade) — PI determinado para Mini-MCV = 15'
-    : q.criterio === 'II' ? 'Critério II: Af ≥ 48 mm (solo de baixa densidade) — PI determinado para Mini-MCV = 10' : '';
-  const caixa = (t, v, u) => `<div class="cx"><div class="ct">${t}</div><div class="cv"><b>${v}</b> <span>${u}</span></div></div>`;
-  const f3 = `${cabecalhoSl()}${barraSl('DNER-CLA 259/96', 'CLASSIFICAÇÃO MCT', m.registro, M.data)}${piTab}
-    <div class="mct-par"><div>${curvas}<p class="mct-obs">Altura do CP final para Mini-MCV = 10: <b>${nf(q.altura, 1)} mm</b>. ${crit}.</p></div>
-      <div class="sl-grafcomp"><div class="gx" style="display:flex;flex-wrap:wrap;gap:2mm;width:100%">${caixa('PI do solo', nf(q.pi, 1), '%')}${caixa("e' = ∛(PI/100 + 20/d')", nf(q.eLinha, 2), '')}</div></div></div>
-    <div class="mct-par3"><div><div class="gt">Mini-MCV × Altura</div>${svgMcvAlturaMct(q)}</div><div><div class="gt">PI × Mini-MCV</div>${svgPiMcvMct(q)}</div>
-      <div><div class="gt">Classificação MCT</div>${svgAbacoMct(q, 280, 200)}</div></div>
-    <table class="g mct-res"><tr><td class="r">Grupo:</td><td class="c"><b>${esc(q.grupo || '—')}</b></td><td class="c" colspan="2"><b>${esc(q.nome || '')}</b></td></tr>
-      <tr><td class="r">Resumo:</td><td class="c">c' = <b>${nf(q.cLinha, 2)}</b></td><td class="c">d' = <b>${nf(q.dLinha, 2)}</b> kg/m³</td><td class="c">PI = <b>${nf(q.pi, 1)} %</b> · e' = <b>${nf(q.eLinha, 2)}</b></td></tr></table>
-    ${rod('m3')}`;
-  return [f1, f2, f3].map(c => `<div class="folha nsl mct">${c}</div>`);
+  const crit = q.criterio === 'I' ? 'Critério I (Af < 48 mm): PI no Mini-MCV = 15' : q.criterio === 'II' ? 'Critério II (Af ≥ 48 mm): PI no Mini-MCV = 10' : '';
+  const coef = `<table class="g mct-t mct-coef"><tr class="tt"><td colspan="2">4 · COEFICIENTES E CLASSIFICAÇÃO (DNER-CLA 259/96)</td></tr>
+    <tr><td class="r">c' = (Ai − Af)/(10 log Nf − 10 log Ni)${cc.manual ? ' — lido no gráfico' : ''}</td><td class="c">Ai ${nf(cc.ai, 2)} · Af ${nf(cc.af, 0)} · Ni ${nf(cc.ni, 0)} · Nf ${nf(cc.nf, 0)} → <b>${nf(q.cLinha, 2)}</b></td></tr>
+    <tr><td class="r">d' = 1000 (MEAS f − MEAS i)/(W f − W i)${dd.manual ? ' — lido no gráfico' : ''}</td><td class="c">(${nf(dd.measF, 3)} − ${nf(dd.measI, 3)}) / (${nf(dd.wF, 1)} − ${nf(dd.wI, 1)}) → <b>${nf(q.dLinha, 1)}</b> kg/m³</td></tr>
+    <tr><td class="r">Altura final p/ Mini-MCV 10 · PI do solo</td><td class="c">${nf(q.altura, 1)} mm · ${crit} → <b>${nf(q.pi, 1)} %</b></td></tr>
+    <tr><td class="r">e' = ∛(PI/100 + 20/d')</td><td class="c"><b>${nf(q.eLinha, 2)}</b></td></tr>
+    <tr class="mct-grupo"><td class="r"><b>GRUPO MCT</b></td><td class="c"><b>${esc(q.grupo || '—')}</b> — <b>${esc(q.nome || '')}</b></td></tr></table>`;
+  const graf = `<div class="mct-par3"><div><div class="gt">Curvas de Mini-MCV (Δh × golpes)</div>${svgDeformMct(q, 340, 230, 9)}</div>
+    <div><div class="gt">Compactação com 10 golpes (d')</div>${svgComp10Mct(q, 300, 230, 9)}</div>
+    <div><div class="gt">Ábaco da classificação MCT</div>${svgAbacoMct(q, 300, 230, 9)}</div></div>
+    <div class="mct-par3"><div><div class="gt">Mini-MCV × altura final</div>${svgMcvAlturaMct(q, 300, 190, 9)}</div>
+    <div><div class="gt">PI × Mini-MCV</div>${svgPiMcvMct(q, 300, 190, 9)}</div><div>${coef}</div></div>`;
+  const corpo = `${cabecalhoSl()}${barraSl('DNER-ME 258/94 · 256/94', 'CLASSIFICAÇÃO MCT', m.registro, M.data)}
+    <div class="mct-par"><div>${cp}</div><div>${pi}</div></div>${leit}${graf}
+    <p class="mct-obs"><b>Observação:</b> ${esc(OBS_MCT)}${M.obs ? ' ' + esc(M.obs) : ''}</p>
+    ${rodapeSl(fl.num('m1'), PRESCR_MCT, labsDaFolhaSl([() => M.operador]))}`;
+  return [`<div class="folha nsl mct">${corpo}</div>`];
 }
 
 /* ------------------------------------------------------------
    Ficha de rascunho (NS-L9): folha 1 — corpos de prova e leituras; folha 2 — perda por imersão
    ------------------------------------------------------------ */
-const FICHA_SLAB_MCT = { aba: 'slmct', modo: 'slab', codigo: SIGLA_SL + '-L9', titulo: 'Classificação MCT — Mini-MCV e perda por imersão', cabs: CAB_SL,
-  repeteCab: ['laboratorista'], compacta: true, densa: true, repete: ['mctOper'],
+const FICHA_SLAB_MCT = { aba: 'slmct', modo: 'slab', codigo: SIGLA_SL + '-L9', titulo: 'Classificação MCT — Mini-MCV e perda por imersão', cabs: cabLabSl('mct.operador'),
+  repeteCab: ['laboratorista'], compacta: true, densa: true,
   nota: 'Leituras do extensômetro em mm, podem ser negativas (ex.: -1,76). Leitura em branco = o CP não levou aquele nº de golpes. Cápsula da imersão pode ter letra (ex.: 54B).',
   blocos: [
-    { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'mctData', _sl('mct.data'), 'data'), fAt('Operador', 'mctOper', _sl('mct.operador'), 'texto', 2)] },
+    { tipo: 'campos', titulo: 'Ensaio', campos: [fAt('Data de execução', 'mctData', _sl('mct.data'), 'data')] },
     { tipo: 'grade', titulo: 'Corpos de prova (Mini-MCV)', larguras: [25, 15, 15, 15, 15, 15], colunas: ['CP 1', 'CP 2', 'CP 3', 'CP 4', 'CP 5'], idx: [0, 1, 2, 3, 4], linhas: [
       linSl('Cilindro n.º', i => `mct.cps.${i}.cilindro`, 'texto'), linSl('Água acrescentada (g)', i => `mct.cps.${i}.agua`),
       linSl('Solo úmido + tara (g)', i => `mct.cps.${i}.umidoTara`), linSl('Cápsula n.º', i => `mct.cps.${i}.capsula`, 'texto'),
@@ -16058,18 +16063,17 @@ function montarCapsulas() {
     </tr>`).join('');
 }
 
-/* Em NP os campos aparecem vazios e travados; estado.lp/estado.ll ficam
-   intactos, então desligar o NP devolve tudo o que já tinha sido digitado. */
-const campoLimite = valor => estado.naoPlastico
-  ? 'value="" disabled' : `value="${valor}"`;
+/* Em NP os números digitados continuam à vista (e editáveis): só o resultado
+   sai NP. Desligar o NP volta a calcular LL, LP e IP com o que está na tela. */
+const campoLimite = valor => `value="${valor}"`;
 
 function montarLP() {
   $('tbLP').innerHTML = estado.lp.map((c,i) => `
     <tr>
-      <td data-rot="Cápsula"><select data-lp="${i}" data-f="capsula"${estado.naoPlastico ? ' disabled' : ''}>${opcoesCapsula(c.capsula, 'capsulasLimites')}</select></td>
+      <td data-rot="Cápsula"><select data-lp="${i}" data-f="capsula">${opcoesCapsula(c.capsula, 'capsulasLimites')}</select></td>
       <td data-rot="Cáps+úmido"><input type="number" inputmode="decimal" step="0.01" data-lp="${i}" data-f="capsulaMaisSoloUmido" ${campoLimite(c.capsulaMaisSoloUmido)}></td>
       <td data-rot="Cáps+seco"><input type="number" inputmode="decimal" step="0.01" data-lp="${i}" data-f="capsulaMaisSoloSeco" ${campoLimite(c.capsulaMaisSoloSeco)}></td>
-      <td class="num" data-rot="Tara" id="lpT${i}">${estado.naoPlastico ? '—' : fmt(c.tara,2)}</td>
+      <td class="num" data-rot="Tara" id="lpT${i}">${fmt(c.tara,2)}</td>
       <td class="forte" data-rot="Umidade" id="lpW${i}">—</td>
       <td class="num" data-rot="Desvio" id="lpD${i}">—</td>
       <td data-rot="Situação" id="lpA${i}"></td>
@@ -16079,10 +16083,10 @@ function montarLP() {
 function montarLL() {
   $('tbLL').innerHTML = estado.ll.map((c,i) => `
     <tr>
-      <td data-rot="Cápsula"><select data-ll="${i}" data-f="capsula"${estado.naoPlastico ? ' disabled' : ''}>${opcoesCapsula(c.capsula, 'capsulasLimites')}</select></td>
+      <td data-rot="Cápsula"><select data-ll="${i}" data-f="capsula">${opcoesCapsula(c.capsula, 'capsulasLimites')}</select></td>
       <td data-rot="Cáps+úmido"><input type="number" inputmode="decimal" step="0.01" data-ll="${i}" data-f="capsulaMaisSoloUmido" ${campoLimite(c.capsulaMaisSoloUmido)}></td>
       <td data-rot="Cáps+seco"><input type="number" inputmode="decimal" step="0.01" data-ll="${i}" data-f="capsulaMaisSoloSeco" ${campoLimite(c.capsulaMaisSoloSeco)}></td>
-      <td class="num" data-rot="Tara" id="llT${i}">${estado.naoPlastico ? '—' : fmt(c.tara,2)}</td>
+      <td class="num" data-rot="Tara" id="llT${i}">${fmt(c.tara,2)}</td>
       <td data-rot="Golpes"><input type="number" inputmode="numeric" step="1" data-ll="${i}" data-f="golpes" ${campoLimite(c.golpes)}></td>
       <td class="forte" data-rot="Umidade" id="llW${i}">—</td>
     </tr>`).join('');
@@ -16126,7 +16130,7 @@ function lerEntradas() {
   const p = parseFloat($('inParcial').value);
   estado.amostraParcialUmida = Number.isFinite(p) ? p : null;
 
-  if (!estado.naoPlastico) {
+  {
     document.querySelectorAll('[data-lp]').forEach(el =>
       lerCapsula(el, estado.lp[+el.dataset.lp], 'capsulasLimites'));
     document.querySelectorAll('[data-ll]').forEach(el =>
@@ -17556,6 +17560,16 @@ const COLUNAS_RESUMO_CSOND = [
   ['Gs (g/cm³)', r => r.densReal, 3], ['γd máx (g/cm³)', r => r.dmax == null ? null : r.dmax / 1000, 3], ['h ót. (%)', r => r.hot, 1],
   ['Exp. (%)', r => r.expansao, 2], ['ISC (%)', r => r.cbr, 1], ['MR (MPa)', r => r.mr, 0], ['Classificação', r => r.nomeSolo, null],
 ];
+/* Ensaio de solos de laboratório (slab): passantes = 1", 3/4", 3/8", nº 4, 10, 16, 30, 40, 60, 70, 100, 200 */
+const COLUNAS_RESUMO_SLAB = [
+  ['Registro', r => r.registro, null], ['Furo', r => r.st || r.estaca, null], ['Data', r => dataBr(r.data), null],
+  ['1"', r => (r.passantes || [])[0], 1], ['3/8"', r => (r.passantes || [])[2], 1], ['Nº 4', r => (r.passantes || [])[3], 1],
+  ['Nº 10', r => (r.passantes || [])[4], 1], ['Nº 40', r => (r.passantes || [])[7], 1], ['Nº 200', r => (r.passantes || [])[11], 1],
+  ['LL (%)', r => r.np ? 'NP' : r.ll, 1], ['LP (%)', r => r.np ? 'NP' : r.lp, 1], ['IP (%)', r => r.np ? 'NP' : r.ip, 1],
+  ['IG', r => r.ig, 0], ['HRB', r => r.hrb, null], ['SUCS', r => r.sucs, null], ['MCT', r => r.mct, null],
+  ['Gs (g/cm³)', r => r.densReal, 3], ['γd máx (g/cm³)', r => r.dmax == null ? null : r.dmax / 1000, 3], ['h ót. (%)', r => r.hot, 1],
+  ['Exp. (%)', r => r.expansao, 2], ['ISC (%)', r => r.cbr, 1], ['GC in situ (%)', r => r.insitu ? r.insitu.gc : null, 1], ['Classificação', r => r.nomeSolo, null],
+];
 const COLUNAS_RESUMO_GERAL = [
   ['Registro', r => r.registro, null], ['Data', r => dataBr(r.data), null], ['Ensaio', r => (MODOS[r.modo] || {}).nome || NOME_FAMILIA[r.familia] || '', null],
   ['Obra', r => r.obra, null], ['Local', r => r.estaca, null], ['Camada / serviço', r => r.camada, null],
@@ -17565,10 +17579,13 @@ const COLUNAS_RESUMO_GERAL = [
 
 function gruposDoResumo() {
   const lista = ordemDoLote(escopoAnalise());
-  const cs = lista.filter(e => (e.resumo || {}).modo === 'csond'), outros = lista.filter(e => (e.resumo || {}).modo !== 'csond');
+  const modo = e => (e.resumo || {}).modo || e.modo;
+  const cs = lista.filter(e => modo(e) === 'csond'), sl = lista.filter(e => modo(e) === 'slab'), outros = lista.filter(e => !['csond', 'slab'].includes(modo(e)));
   return [
     cs.length && { titulo: 'Resumo da Caracterização de Sondagem', colunas: COLUNAS_RESUMO_CSOND, ensaios: cs,
       sub: 'Granulometria (% que passa) · limites · classificações · compactação · ISC · MR' },
+    sl.length && { titulo: 'Quadro Resumo dos Ensaios de Solos', colunas: COLUNAS_RESUMO_SLAB, ensaios: sl,
+      sub: 'Ensaios selecionados · granulometria (% que passa) · limites · classificações (HRB, SUCS, MCT) · compactação · ISC · grau de compactação in situ' },
     outros.length && { titulo: 'Resumo dos Ensaios', colunas: COLUNAS_RESUMO_GERAL, ensaios: outros, sub: 'Um ensaio por linha' },
   ].filter(Boolean);
 }
@@ -17616,10 +17633,90 @@ function assinaturasResumo(ensaios) {
     <div>${resp}<br><span class="cargo">Engenheiro Responsável</span></div></div>`;
 }
 
+/* ------------------------------------------------------------
+   QUADRO RESUMO DOS ENSAIOS — ensaio de solos (slab), no modelo "Quadro resumo nacon rev00":
+   furo, localização (N/E), km, camada, 14 peneiras, frações, limites, IG/HRB/SUCS, massa
+   específica real, energia, compactação, ISC, expansão e o in situ (γs e umidade natural).
+   ------------------------------------------------------------ */
+const LINHAS_QR_SLAB = 9;
+/* larguras (mm de referência) convertidas em % — a tabela sempre cabe na folha deitada */
+const COLS_QR_SLAB = (() => { const w = [10, 15, 10, 13, ...Array(14).fill(7), ...Array(9).fill(6), 5, 8, 9, ...Array(8).fill(6.2)], t = w.reduce((a, b) => a + b, 0);
+  return w.map(x => `<col style="width:${(x / t * 100).toFixed(3)}%">`).join(''); })();
+const PEN_QR = ['n.º 2"', 'n.º 1.1/2"', 'n.º 1"', 'n.º 3/4"', 'n.º 3/8"', 'n.º 4', 'n.º 10', 'n.º 16', 'n.º 30', 'n.º 40', 'n.º 60', 'n.º 70', 'n.º 100', 'n.º 200'];
+/** O ponto do plano do ensaio (para N, E, km e profundidade). */
+function pontoDoResumo(r) {
+  if (typeof PLANOS === 'undefined' || !r.plano || !r.st) return null;
+  const pl = PLANOS.planos.find(x => x.codigo === r.plano);
+  return pl ? (pontosDo(pl.id).find(x => x.st === r.st) || null) : null;
+}
+/** Uma linha do quadro: os valores em ordem (texto já formatado). */
+function linhaQrSlab(e) {
+  const r = e.resumo || {}, p = pontoDoResumo(r), f = (x, d) => x === null || x === undefined || x === '' || !isFinite(x) ? '-' : fmt(x, d);
+  const np = x => r.np ? 'NP' : f(x, 1);
+  // ensaios salvos antes do quadro da NACON: só tinham as peneiras de 1" para baixo e as frações grossas
+  const fr = r.fr6 || { pedregulho: r.pedregulho, silte: r.silte, argila: r.argila }, sed = r.fr6 ? !!r.temSed : true, ins = r.insitu || {};
+  const p14 = r.passa14 || (r.passantes ? [null, null, ...r.passantes] : []);
+  const camada = r.camada || (p && typeof profTexto === 'function' ? profTexto(p.prof) : '');
+  const en = String(r.energia || '').toUpperCase(), energia = /INTERM/.test(en) ? 'Interm.' : /MODIF/.test(en) ? 'Modif.' : /NORMAL/.test(en) ? 'Normal' : en;
+  return {
+    furo: r.st || r.estaca || r.registro || '', n: p && isFinite(p.norte) ? 'N: ' + Math.round(p.norte) : '', e: p && isFinite(p.este) ? 'E: ' + Math.round(p.este) : '',
+    km: p && typeof kmTexto === 'function' ? kmTexto(p.km) : '', camada,
+    vals: [...PEN_QR.map((_, i) => f(p14[i], 2)),
+      ...['pedregulho', 'grossa', 'media', 'fina'].map(k => f(fr[k], 1)), ...['silte', 'argila'].map(k => sed ? f(fr[k], 1) : '-'),
+      np(r.ll), np(r.lp), np(r.ip), f(r.ig, 0), r.hrb || '-', r.sucs || '-', f(r.densReal, 3), energia || '-',
+      f(r.dmax == null ? null : r.dmax / 1000, 3), f(r.hot, 1), f(r.cbr, 1), f(r.expansao, 1), f(ins.gs, 3), f(ins.w, 1)],
+  };
+}
+function folhasQrSlab(ensaios) {
+  const linhas = ensaios.map(linhaQrSlab), n = Math.max(1, Math.ceil(linhas.length / LINHAS_QR_SLAB));
+  const r0 = (ensaios[0] || {}).resumo || {};
+  const m0 = (((ensaios[0] || {}).foto || {}).estado || {}).medicao || {};
+  const cfg = (estado.slab || {}).cfg || ((((ensaios[0] || {}).foto || {}).estado || {}).slab || {}).cfg || {};
+  const end = String(cfg.endereco || ((typeof MARCA === 'object' && MARCA.slab) || {}).endereco || '').split('\n').filter(Boolean).join('<br>');
+  const resp = m0.engenheiro || cfg.responsavel || '', crea = cfg.crea || '';
+  const css = `<style>
+    .folha.qrs{font-family:Arial,Helvetica,sans-serif;color:#000;padding:4mm 5mm}
+    .qrs .topo{display:flex;align-items:center;justify-content:space-between;margin-bottom:2mm} .qrs .topo img{height:13mm} .qrs .topo .end{font-size:7pt;text-align:center}
+    .qrs h1{text-align:center;font-size:10pt;margin:1mm 0 2mm;letter-spacing:.3px}
+    .qrs .cab{width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:1.5mm} .qrs .cab td{padding:.6mm 1mm;border-bottom:.2mm solid #999}
+    .qrs .cab .k{width:16mm;font-size:7pt} .qrs .cab .v{font-weight:700} .qrs .cab .k2{width:30mm;font-size:7pt;text-align:right} .qrs .cab .v2{width:40mm;font-weight:700;text-align:center}
+    .qrs table.t{width:100%;border-collapse:collapse;table-layout:fixed} .qrs table.t th,.qrs table.t td{border:.2mm solid #000;font-size:5.4pt;letter-spacing:0;text-transform:none;text-align:center;padding:.2mm .2mm;overflow:hidden}
+    .qrs table.t th{font-weight:700;font-size:5.4pt;line-height:1.05} .qrs table.t th.v{height:25mm;padding:0;vertical-align:middle} .qrs table.t th.v .vt{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:0 auto;max-height:25mm}
+    .qrs table.t td.st{font-weight:700;font-size:6.6pt} .qrs table.t td.st small{display:block;font-weight:400;font-size:4.8pt} .qrs table.t td.loc{text-align:left;font-size:5.4pt;line-height:1.5}
+    .qrs table.t tbody tr{height:9mm}
+    .qrs .rod{display:grid;grid-template-columns:1fr 70mm;border:.2mm solid #000;border-top:0;font-size:7pt;min-height:16mm}
+    .qrs .rod > div{padding:1mm} .qrs .rod .ap{border-left:.2mm solid #000} .qrs .rod .ass{text-align:center;margin-top:7mm;font-weight:700;font-size:7pt;line-height:1.3}
+  </style>`;
+  const cab1 = `<tr><th rowspan="2">Estaca/<br>Furo</th><th rowspan="2">Localização</th><th rowspan="2">Km</th><th rowspan="2">Camada<br>(m)</th>
+    <th colspan="14">Granulometria (% Passando)</th><th colspan="6">Resumo da Granulometria</th><th colspan="3">Limites</th><th colspan="3">Classificação</th>
+    <th rowspan="2" class="v"><div class="vt">Massa Específica<br>Real (g/cm³)</div></th><th rowspan="2" class="v"><div class="vt">Energia<br>Compactação</div></th><th rowspan="2" class="v"><div class="vt">Peso Esp. Seco<br>Máximo (g/cm³)</div></th>
+    <th rowspan="2" class="v"><div class="vt">Umidade Ótima (%)</div></th><th rowspan="2" class="v"><div class="vt">I.S.C. (%)</div></th><th rowspan="2" class="v"><div class="vt">Expansão (%)</div></th>
+    <th rowspan="2" class="v"><div class="vt">Peso Esp. Solo Seco<br>"in situ" (g/cm³)</div></th><th rowspan="2" class="v"><div class="vt">Umidade Natural (%)</div></th></tr>
+    <tr>${PEN_QR.map(t => `<th>${t.replace('n.º ', 'n.º<br>')}</th>`).join('')}${['Pedreg. %', 'Areia Grossa %', 'Areia Média %', 'Areia Fina %', 'Silte %', 'Argila %'].map(t => `<th class="v"><div class="vt">${t}</div></th>`).join('')}
+    <th class="v"><div class="vt">LL (%)</div></th><th class="v"><div class="vt">LP (%)</div></th><th class="v"><div class="vt">IP (%)</div></th><th class="v"><div class="vt">IG</div></th><th class="v"><div class="vt">HRB</div></th><th class="v"><div class="vt">SUCS</div></th></tr>`;
+  const folhas = [];
+  for (let k = 0; k < n; k++) {
+    const parte = linhas.slice(k * LINHAS_QR_SLAB, (k + 1) * LINHAS_QR_SLAB);
+    while (parte.length < LINHAS_QR_SLAB) parte.push(null);
+    const corpo = parte.map(l => l ? `<tr><td class="st">${esc(l.furo)}</td><td class="loc">${esc(l.n)}<br>${esc(l.e)}</td><td>${esc(l.km)}</td><td>${esc(l.camada)}</td>${l.vals.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`
+      : `<tr><td></td><td></td><td></td><td></td>${'<td></td>'.repeat(34)}</tr>`).join('');
+    folhas.push(`<div class="folha paisagem qrs">${css}
+      <div class="topo"><div>${logoAtual() ? `<img src="${logoAtual()}" alt="">` : `<b>${esc(nomeEmpresa())}</b>`}</div><div class="end">${end}</div></div>
+      <h1>QUADRO RESUMO DOS ENSAIOS</h1>
+      <table class="cab"><tr><td class="k">Cliente:</td><td class="v">${esc(r0.cliente || '')}</td><td class="k2">Data:</td><td class="v2">${dataBr(hojeIso())}</td></tr>
+        <tr><td class="k">Obra:</td><td class="v">${esc(r0.obra || '')}</td><td class="k2">Nº Registro e OS:</td><td class="v2">${esc(r0.os || '')}</td></tr>
+        <tr><td class="k">Local:</td><td class="v">${esc(r0.local || '')}</td><td class="k2">Folha:</td><td class="v2">${String(k + 1).padStart(2, '0')}/${String(n).padStart(2, '0')}</td></tr></table>
+      <table class="t"><colgroup>${COLS_QR_SLAB}</colgroup><thead>${cab1}</thead><tbody>${corpo}</tbody></table>
+      <div class="rod"><div><b>OBSERVAÇÕES:</b></div><div class="ap"><b>APROVADO:</b><div class="ass">${esc(resp)}${crea ? '<br>' + esc(crea) : ''}</div></div></div></div>`);
+  }
+  return folhas;
+}
+
 function folhasDoResumo() {
   const grupos = gruposDoResumo();
   const paginas = [];
   grupos.forEach(g => {
+    if (g.colunas === COLUNAS_RESUMO_SLAB) { folhasQrSlab(g.ensaios).forEach(html => paginas.push({ g, html, pronta: true })); return; }
     const regs = g.ensaios.map(e => (e.resumo || {}).registro).filter(Boolean);
     const faixa = regs.length > 6 ? `${regs[0]} … ${regs[regs.length - 1]} (${regs.length})` : regs.join(', ');
     const n = Math.max(1, Math.ceil(g.ensaios.length / LINHAS_POR_FOLHA_RESUMO));
@@ -17629,10 +17726,12 @@ function folhasDoResumo() {
         return `<tr>${g.colunas.map(([, f, casas]) => { const x = f(r);
           return `<td${casas === null ? ' class="tx"' : ''}>${casas === null || typeof x !== 'number' ? (x ?? '') : v1(x, casas)}</td>`; }).join('')}</tr>`; }).join('');
       const ultima = p === n - 1;
-      const csond = g.colunas === COLUNAS_RESUMO_CSOND;
-      const cabeca = csond
+      const csond = g.colunas === COLUNAS_RESUMO_CSOND || g.colunas === COLUNAS_RESUMO_SLAB;
+      const cabeca = g.colunas === COLUNAS_RESUMO_CSOND
         ? `<tr><th colspan="6">Identificação</th><th colspan="6">% que passa</th><th colspan="7">Limites e classificação</th>
-            <th>Real</th><th colspan="3">Compactação</th><th>ISC</th><th>MR</th><th></th></tr>` : '';
+            <th>Real</th><th colspan="3">Compactação</th><th>ISC</th><th>MR</th><th></th></tr>`
+        : g.colunas === COLUNAS_RESUMO_SLAB ? `<tr><th colspan="3">Identificação</th><th colspan="6">% que passa</th><th colspan="7">Limites e classificação</th>
+            <th>Real</th><th colspan="3">Compactação</th><th>ISC</th><th>In situ</th><th></th></tr>` : '';
       paginas.push({ g, html: `${topoResumo(g, 0, 0, faixa)}
         <table class="f res-lote${csond ? ' cs' : ''}"><thead>${cabeca}<tr>${g.colunas.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead>
         <tbody>${corpo}${ultima && g.ensaios.length > 1 ? linhasEstatisticas(g.colunas, g.ensaios) : ''}</tbody></table>
@@ -17640,7 +17739,7 @@ function folhasDoResumo() {
     }
   });
   const total = paginas.length;
-  return paginas.map((p, i) => `<div class="folha paisagem">${p.html
+  return paginas.map((p, i) => p.pronta ? p.html : `<div class="folha paisagem">${p.html
     .replace('<div><b>Folha:</b> 0 / 0</div>', `<div><b>Folha:</b> ${i + 1} / ${total}</div>`)}</div>`).join('');
 }
 
@@ -17671,6 +17770,14 @@ function baixarPlanilhaLote() {
       cols.splice(i0, 6, ...PEN.map((t, k) => ['% passa ' + t, r => { const x = (r.passantes || [])[k]; return typeof x === 'number' ? +x.toFixed(1) : ''; }]));
       cols.splice(cols.findIndex(c => c[0] === 'Pista') + 1, 0, ['Latitude', r => r.latitude], ['Longitude', r => r.longitude], ['Obra', r => r.obra], ['Camada', r => r.camada]);
       cols.push(['% silte', r => r.silte == null ? '' : +r.silte.toFixed(1)], ['% argila', r => r.argila == null ? '' : +r.argila.toFixed(1)], ['Energia', r => r.energia]);
+    }
+    if (g.colunas === COLUNAS_RESUMO_SLAB) {      // as mesmas colunas do quadro resumo da NACON
+      linhas.push(['Registro', 'Estaca/Furo', 'Norte', 'Este', 'Km', 'Camada (m)', ...PEN_QR.map(t => '% passa ' + t.replace('n.º ', '')),
+        'Pedreg. %', 'Areia grossa %', 'Areia média %', 'Areia fina %', 'Silte %', 'Argila %', 'LL (%)', 'LP (%)', 'IP (%)', 'IG', 'HRB', 'SUCS',
+        'Massa esp. real (g/cm³)', 'Energia', 'Peso esp. seco máx. (g/cm³)', 'Umidade ótima (%)', 'ISC (%)', 'Expansão (%)', 'Peso esp. seco in situ (g/cm³)', 'Umidade natural (%)'].map(cel).join(';'));
+      g.ensaios.forEach(e => { const l = linhaQrSlab(e);
+        linhas.push([(e.resumo || {}).registro || '', l.furo, l.n.replace('N: ', ''), l.e.replace('E: ', ''), l.km, l.camada, ...l.vals.map(v => v === '-' ? '' : v)].map(cel).join(';')); });
+      return;
     }
     linhas.push(cols.map(c => cel(c[0])).join(';'));
     g.ensaios.forEach(e => linhas.push(cols.map(c => cel(c[1](e.resumo || {}))).join(';')));
@@ -18632,7 +18739,7 @@ function trocarPlasticidade(np) {
   if (np === estado.naoPlastico) return;
   // lê o que está na tela ANTES de travar os campos, senão o que o
   // laboratorista acabou de digitar se perde ao voltar para o ensaio normal
-  if (!np || !estado.naoPlastico) lerEntradas();
+  lerEntradas();
   estado.naoPlastico = np;
   montarNP();
   montarLP();
@@ -18644,15 +18751,15 @@ function trocarPlasticidade(np) {
 /** Mostra ou esconde os cartões de limites conforme a escolha. */
 function aplicarPlasticidade() {
   const np = estado.naoPlastico;
-  ['cardLP', 'cardLL', 'cardReta'].forEach(id => $(id).classList.toggle('apagado', np));
+  ['cardLP', 'cardLL', 'cardReta'].forEach(id => $(id).classList.remove('apagado'));
   $('cardReta').classList.toggle('escondido', np);
   $('npTag').textContent = np ? 'NP' : 'Ensaio normal';
   $('npTag').className = 'tag' + (np ? ' pendente' : ' ok');
   $('npAviso').innerHTML = np
     ? '<div class="aviso"><span class="ico">!</span><span>'
-      + 'Os campos de limite ficam vazios e travados enquanto o NP estiver ligado, mas '
-      + '<b>nada do que você digitou foi apagado</b> — volte para “Determinar LL e LP” e os '
-      + 'valores reaparecem.</span></div>'
+      + 'Material marcado como <b>não plástico</b>: LL, LP e IP saem como NP. '
+      + 'Os números que você digitou continuam nos campos e ficam guardados — '
+      + 'volte para “Determinar LL e LP” e o app calcula com eles.</span></div>'
     : '';
 }
 
@@ -27415,7 +27522,6 @@ function novoBolDoFuro(n) {
   if (f && !f.atual && f.motivo) {
     b.parada = b.tipo === 'spt' ? (f.motivo === 'impenetravel' ? 'amostrador' : 'paralisado')
       : ({ impenetravel: 'impenetravel', desmoronamento: 'desmoronamento' }[f.motivo] || motivoTexto(f).toUpperCase());
-    b.obs = `FURO ABANDONADO: ${motivoTexto(f).toUpperCase()}.`;
   }
   return b;
 }
@@ -27456,7 +27562,7 @@ function dadosPorFuro(base, sl, p, pl) {
   return bols.map(({ n, bol }) => {
     const f = furos.find(x => x.n === n) || { n, rotulo: rotuloFuro(p ? p.st : base.estaca, n) };
     const b = f.atual !== false ? juntarBol(bol, p ? bolDoPonto(p) : null) : juntarBol(bol || (sl ? null : null), null);
-    if (!bol && f.atual === false) { b.data = f.inicio ? dataLocal(new Date(f.inicio.em)) : ''; b.obs = `FURO ABANDONADO: ${motivoTexto(f).toUpperCase()}.`; }
+    if (!bol && f.atual === false) b.data = f.inicio ? dataLocal(new Date(f.inicio.em)) : '';
     if (bol && b.tipo !== bol.tipo) b.tipo = bol.tipo;
     if (!bol && base.bol) b.tipo = base.bol.tipo;
     const g = f.inicio && ehNumero(f.inicio.lat) && f.n > 1 && pl ? geoParaUtm(f.inicio.lat, f.inicio.lon, pl.fuso || 20, pl.hemisferio || 'S') : null;
@@ -27859,7 +27965,46 @@ const CSS_SPT = `
 function folhaSlabBol(pacote) {
   const s = estado.slab;
   if (estado.modo !== 'slab' || !s || !(bolPreenchido(s.bol) || Object.values(s.bolOutros || {}).some(bolPreenchido))) return [];
-  return dadosBoletinsDoEnsaio().map(d => `<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d) : htmlFolhaBoletim(d)));
+  const ds = dadosBoletinsDoEnsaio(), ult = ds[ds.length - 1], fotos = fotosBolProntas(ult.p);
+  const folhas = ds.map((d, i) => { const f = i === ds.length - 1 && fotos.length;
+    return `<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d, f ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(d, f ? '1/2' : 'Única')); });
+  // o registro fotográfico do furo vai junto, como no PDF do plano
+  if (fotos.length) folhas.push(`<style>${CSS_BOLETIM}</style>` + htmlFolhaFotosBol(ult.estaca || (ult.p && ult.p.st), ult.cliente, fotos));
+  return folhas;
+}
+
+/** A folha do registro fotográfico (até 6 fotos do campo), depois do boletim. */
+function htmlFolhaFotosBol(st, cliente, fotos) {
+  const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
+  const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
+  const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
+  return `<div class="folha nbol fotos-folha">
+      <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
+      <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(st)} · ${atr(cliente || '')}</div>
+      <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${distTexto(f.dist)} do ponto` : ''}</figcaption></figure>`).join('')}</div>
+      <table class="coord"><tr><td class="r fl">Folha:<br><span>2/2</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
+    </div>`;
+}
+/* Fotos do campo para o PDF do ensaio (aba Boletim / laudo): a montagem das folhas não espera,
+   então as fotos são lidas antes (ao abrir a aba) e guardadas aqui; quando chegam, o laudo é redesenhado. */
+const FOTOS_BOL = {};
+const chaveFotosBol = p => (sondagemDe(p).fotos || []).slice(0, 6).map(f => f.id).join('|');
+function carregarFotosBol(p) {
+  if (!p) return Promise.resolve([]);
+  const chave = chaveFotosBol(p), c = FOTOS_BOL[p.id];
+  if (c && c.chave === chave) return c.pronto;
+  const pronto = (async () => { const l = []; for (const f of (sondagemDe(p).fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) l.push({ f, u }); }
+    const at = FOTOS_BOL[p.id]; if (at && at.chave === chave) { at.fotos = l; at.ok = true; }
+    if (l.length && estado.modo === 'slab' && estado.slab && estado.slab.plano && estado.slab.plano.pontoId === p.id && typeof atualizar === 'function') atualizar();
+    return l; })();
+  FOTOS_BOL[p.id] = { chave, fotos: [], ok: false, pronto };
+  return pronto;
+}
+function fotosBolProntas(p) {
+  if (!p || !chaveFotosBol(p)) return [];
+  const c = FOTOS_BOL[p.id];
+  if (!c || c.chave !== chaveFotosBol(p)) { carregarFotosBol(p); return []; }
+  return c.fotos;
 }
 
 async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
@@ -27873,12 +28018,7 @@ async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
     if (!semFotos) for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
     ds.forEach((x, i) => { const ult = i === ds.length - 1;
       folhas.push(x.bol.tipo === 'spt' ? htmlFolhaSpt(x, ult && fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(x, ult && fotos.length ? '1/2' : 'Única')); });
-    if (fotos.length) folhas.push(`<div class="folha nbol fotos-folha">
-      <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
-      <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(p.st)} · ${atr(d.cliente || '')}</div>
-      <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${distTexto(f.dist)} do ponto` : ''}</figcaption></figure>`).join('')}</div>
-      <table class="coord"><tr><td class="r fl">Folha:<br><span>2/2</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
-    </div>`);
+    if (fotos.length) folhas.push(htmlFolhaFotosBol(p.st, d.cliente, fotos));
   }
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Boletins de sondagem — plano ${atr(pl.codigo)}</title><style>
     @page{size:A4;margin:9mm 8mm} body{margin:0}
@@ -27897,6 +28037,7 @@ function htmlAbaBoletimSlab() {
   s.bol = s.bol || vazioBol();
   garantirFuroBol();
   const fe = furosDoEnsaio(), furosP = fe.p ? furosDoPonto(fe.p) : [];
+  if (fe.p) carregarFotosBol(fe.p);
   const chipsFuro = fe.n < 2 ? '' : `<div class="card destaque-card"><h2>Furos deste ponto <span class="tag">${fe.n} furos · um boletim cada</span></h2>
       <div class="pl-passos" style="grid-template-columns:repeat(${Math.min(fe.n, 4)},1fr)">${Array.from({ length: fe.n }, (_, i) => i + 1).map(n => {
         const f = furosP.find(x => x.n === n) || { rotulo: rotuloFuro(fe.p ? fe.p.st : '', n) };
