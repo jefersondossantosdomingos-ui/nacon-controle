@@ -28585,19 +28585,24 @@ async function arquivosDoPlano(pl, aviso = () => {}) {
   const laudos = htmlLaudosDoPlano(pl, pts);
   if (laudos) txt('3 LAUDOS DOS ENSAIOS.html', laudos.html);
   // fotos do campo e rascunhos anexados aos ensaios
+  // nomes repetidos (várias fotos da mesma etapa, furo deslocado…) ganham (2), (3): no zip
+  // dois arquivos com o mesmo nome fariam o Windows pedir para substituir e uma foto se perderia
+  const usados = new Set();
+  const unico = nome => { if (!usados.has(nome.toLowerCase())) { usados.add(nome.toLowerCase()); return nome; }
+    const m = nome.match(/^(.*?)(\.\w+)?$/); for (let k = 2; ; k++) { const n = `${m[1]} (${k})${m[2] || ''}`; if (!usados.has(n.toLowerCase())) { usados.add(n.toLowerCase()); return n; } } };
   let i = 0;
   for (const p of pts) {
     i++;
     if (i % 10 === 0) aviso(`Juntando fotos e rascunhos… ${i}/${pts.length} furos`);
     for (const f of (sondagemDe(p).fotos || [])) {
       const b = await bytesDoAnexo(f);
-      if (b) fotos.push({ nome: `${raiz}/FOTOS DO CAMPO/${limpaNome(p.st)}/${limpaNome(f.nome || f.id)}${/\.\w+$/.test(f.nome || '') ? '' : '.' + b.ext}`, bytes: b.bytes });
+      if (b) fotos.push({ nome: unico(`${raiz}/FOTOS DO CAMPO/${limpaNome(p.st)}/${limpaNome(f.nome || f.id)}${/\.\w+$/.test(f.nome || '') ? '' : '.' + b.ext}`), bytes: b.bytes });
       else faltou.push(`${p.st}: foto ${f.nome || f.id}`);
     }
     const e = ensaioDoPonto(p, pl);
     if (e && typeof anexosDoEnsaio === 'function') for (const { aba, a } of anexosDoEnsaio(e)) {
       const b = await bytesDoAnexo(a);
-      if (b) fotos.push({ nome: `${raiz}/RASCUNHOS/${limpaNome(p.st)}/${limpaNome(aba)} - ${limpaNome((a.nome || a.id).replace(/\.\w+$/, ''))}.${b.ext}`, bytes: b.bytes });
+      if (b) fotos.push({ nome: unico(`${raiz}/RASCUNHOS/${limpaNome(p.st)}/${limpaNome(aba)} - ${limpaNome((a.nome || a.id).replace(/\.\w+$/, ''))}.${b.ext}`), bytes: b.bytes });
       else faltou.push(`${p.st}: rascunho ${a.nome || a.id}`);
     }
   }
