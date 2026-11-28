@@ -15413,7 +15413,7 @@ const BLOCOS_SPT_F1 = [
   { tipo: 'grade', titulo: 'Ensaio do SPT — uma linha por metro', add: '#bolSptMais',
     colunas: ['Prof. revest. (m)', '1º /15 cm golpes', '1º cm', '2º /15 cm golpes', '2º cm', '3º /15 cm golpes', '3º cm', 'Torque máx. (kgf.m)', 'Torque resid. (kgf.m)', 'Mudança de camada (m)', 'Material', 'Complemento', 'Cor', 'Interp. geológica'],
     idx: SPT_CAMPOS_LINHA.map((_, i) => i), tipos: SPT_CAMPOS_LINHA.map(k => SPT_TEXTO.includes(k) ? 'texto' : 'num'),
-    linhas: Array.from({ length: SPT_LINHAS_FICHA }, (_, i) => [`Amostra ${i + 1} (${i + 1},00 a ${i + 1},45 m)`, c => `bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`, 'num', '', c => _sl(`bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`)]) },
+    linhas: Array.from({ length: SPT_LINHAS_FICHA }, (_, i) => [`Linha ${i + 1} (amostra do ${i + 1}º metro)`, c => `bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`, 'num', '', c => _sl(`bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`)]) },
 ];
 const BLOCOS_SPT_F2 = [
   { tipo: 'campos', titulo: 'Permeabilidade — ensaio', quebra: true, add: '#bolPermLigar', campos: [fAt('Ensaio nº', 'pmNum', _sl('bol.perm.numero'), 'texto'),
@@ -15463,7 +15463,7 @@ function desenhoFichaSpt({ V, CB, cls, logo, valor }) {
   const na = (k, c) => `<td>${V(`bol.naLeituras.${k}.${c}`)}</td>`;
   const linhas = Array.from({ length: SPT_LINHAS_FICHA }, (_, i) => {
     const g = k => { const gv = V(`bol.spt.${i}.g.${k}`), pv = V(`bol.spt.${i}.p.${k}`); return `<td class="gp">${gv}${pv ? `<small>/${pv}</small>` : ''}</td>`; };
-    return `<tr><td>${V(`bol.spt.${i}.rev`)}</td><td class="pi">${i + 1}</td><td class="pi">${i + 1},00</td><td class="pi">${i + 1},45</td>${g(0)}${g(1)}${g(2)}
+    return `<tr><td>${V(`bol.spt.${i}.rev`)}</td><td></td><td></td><td></td>${g(0)}${g(1)}${g(2)}
       <td>${V(`bol.spt.${i}.tq`)}</td><td>${V(`bol.spt.${i}.tr`)}</td><td>${V(`bol.spt.${i}.mud`)}</td>${SPT_TEXTO.map(k => `<td class="mat">${V(`bol.spt.${i}.${k}`)}</td>`).join('')}</tr>`; }).join('');
   const f1 = `<section class="pg nc paisagem">${cabTopo('BOLETIM DE SONDAGEM À PERCUSSÃO', 1)}
     <div class="nc-cab">
