@@ -12888,7 +12888,10 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
           ? `<tr><th>${rot}</th>${b.idx.map(ix => `<td>${V(fn(ix))}</td>`).join('')}${extras.map(c => `<td class="conta">${V(`conta:${f.aba}:${rot}:${c}`)}</td>`).join('')}</tr>`
           : `<tr class="conta"><th>${rot} ${selo}</th>${b.idx.map(ix => `<td>${V(`conta:${f.aba}:${b.titulo}:${rot}:${ix}`)}</td>`).join('')}${extras.map(() => '<td></td>').join('')}</tr>`).join('')}</tbody></table>`;
   };
+  // ficha com desenho próprio (ex.: o boletim SPT no modelo do cliente): só os quadros mudam de lugar — os caminhos são os mesmos
+  const valorP = c => preenchido && preenchido.valores ? preenchido.valores[c] : undefined;
   const pagina = f => {
+    if (typeof f.desenho === 'function') return f.desenho({ V, CB, cls, logo, valor: valorP });
     // `quebra` num bloco começa outra folha da mesma ficha (o projeto do Marshall 031 tem três)
     const grupos = [];
     f.blocos.forEach(b => { if (b.quebra || !grupos.length) grupos.push([]); grupos[grupos.length - 1].push(b); });
@@ -12964,6 +12967,41 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   .tag-conta{font:700 6.5pt Arial;letter-spacing:.5px;text-transform:uppercase;border:0.3mm solid #777;border-radius:1mm;padding:0 0.8mm;color:#666;font-style:normal;white-space:nowrap}
   footer{margin-top:4mm;font-size:8pt;color:#444;border-top:0.3mm solid #000;padding-top:1.5mm}
   ${preenchido && preenchido.css ? preenchido.css : ''}
+  /* desenho próprio (modelo NACON): folha deitada (Mod042a) e a do ensaio de permeabilidade (Mod045) */
+  @page paisagem{size:A4 landscape;margin:7mm}
+  .pg.nc{font-size:8pt;padding:0} .pg.nc.paisagem{min-height:0} .pg.nc.paisagem{page:paisagem;width:283mm;min-height:194mm}
+  .nc-topo{display:flex;align-items:center;justify-content:space-between;border-bottom:.6mm solid #000;padding-bottom:1mm}
+  .nc-topo img{height:8.5mm} .nc-end{font-size:7pt;text-align:right}
+  .nc-tit{display:flex;align-items:center;gap:4mm;border-bottom:.4mm solid #000;padding:.8mm 0}
+  .nc-tit span{font:700 8pt Arial;letter-spacing:1.5px;border:.3mm solid #000;padding:.2mm 1.5mm} .nc-tit b{flex:1;text-align:center;font-size:11pt}
+  .nc-tit em{font:700 10pt 'Courier New',monospace;font-style:normal;border:.5mm solid #000;padding:.4mm 2mm}
+  .nc .q{height:5.6mm;border:.35mm solid #000;border-radius:.6mm;display:inline-block;min-width:22mm;vertical-align:middle}
+  .nc .q.in{height:5mm;min-width:20mm} .nc .q.in.larga{min-width:45mm} .nc .q.alta{height:14mm;display:block}
+  .nc td .q{display:inline-block} .nc .pre{font-weight:700}
+  .nc-cab{display:grid;grid-template-columns:1.15fr 1fr;gap:2mm;margin-top:1mm}
+  .nc-id{width:100%;border-collapse:collapse;table-layout:auto} .nc-id td{border:.3mm solid #000;padding:.35mm 1.2mm;font-size:8pt;height:auto;vertical-align:middle}
+  .nc-id td span{font-weight:700;margin-right:1mm} .nc-id td .q{min-width:18mm;margin-right:2mm}
+  .nc-tempo i,.nc-crit i,.nc .op{font-style:normal;display:inline-flex;align-items:center;gap:1mm;margin-right:3mm}
+  .nc .cx{display:inline-block;width:3.8mm;height:3.8mm;border:.4mm solid #000;position:relative;vertical-align:middle}
+  .nc .cx > span{position:absolute;inset:-1mm 0 0 0;display:flex;align-items:center;justify-content:center;font-size:12pt !important;padding:0 !important}
+  .nc-na table{width:100%;border-collapse:collapse;table-layout:fixed} .nc-na th,.nc-na td{border:.3mm solid #000;font-size:7pt;height:4.1mm;padding:0 .8mm}
+  .nc-na th{background:#eee;font-weight:700;text-align:left} .nc-apos{margin-top:1mm} .nc-apos th{text-align:center}
+  .nc-spt{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:1.2mm}
+  .nc-spt th,.nc-spt td{border:.3mm solid #000;font-size:7.4pt;text-align:center;padding:0 .5mm}
+  .nc-spt thead th{background:#eee;height:5mm;line-height:1.05} .nc-spt th.sond{text-align:left;background:#fff}
+  .nc-spt td{height:4.6mm} .nc-spt td.pi{color:#666;font-size:7pt} .nc-spt td.mat{text-align:left} .nc-spt td.gp small{font-size:7pt}
+  .nc-rod{display:grid;grid-template-columns:1fr 80mm 28mm;border:.3mm solid #000;border-top:0;font-size:6.9pt}
+  .nc-rod > div{padding:.6mm 1.4mm} .nc-crit div{margin:.25mm 0} .nc-leg{border-left:.3mm solid #000;line-height:1.35} .nc-leg small{font-size:6pt;color:#333;line-height:1.25}
+  .nc-prof{border-left:.3mm solid #000} .nc-prof .q{display:block;margin-top:1mm;min-width:0}
+  .pg.nc footer{margin-top:1mm;font-size:7pt;padding-top:.6mm}
+  .nc.perm .nc-id{margin-top:1.5mm} .nc-perm{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:2mm}
+  .nc-perm h4{margin:2mm 0 1mm;font-size:9pt;background:#eee;border:.3mm solid #000;padding:.6mm 1.2mm;text-align:center}
+  .nc-perm .op{display:flex;margin:1.2mm 0;font-size:8.5pt}
+  .geo{display:grid;grid-template-columns:26mm 1fr;gap:2mm;align-items:start} .geo svg{width:26mm;height:64mm}
+  .geo-c div{display:flex;align-items:center;gap:1.2mm;margin:1.4mm 0;font-size:8pt} .geo-c span{flex:1} .geo-c .q{min-width:17mm} .geo-c em{font-style:normal;width:5mm}
+  .nc-lt{width:100%;border-collapse:collapse} .nc-lt th,.nc-lt td{border:.3mm solid #000;font-size:8pt;height:7.2mm;text-align:center} .nc-lt th{background:#eee;height:auto;padding:.6mm}
+  .kperm{display:flex;align-items:center;gap:2mm;margin:1.5mm 0;font-weight:700} .kperm .q{flex:1}
+  .nc-obs{margin-top:3mm} .nc-obs span,.nc-ass span{font-weight:700} .nc-ass{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:3mm}
   @media screen{body{background:#ccc}.pg{background:#fff;margin:8mm auto;padding:10mm;box-shadow:0 1px 6px rgba(0,0,0,.3)}}
   </style></head><body>${abas.map(a => fichaDaAba(a)).filter(Boolean).map(pagina).join('')}</body></html>`;
 }
@@ -13297,6 +13335,7 @@ function aplicarConferencia() {
     n++;
   });
   const aba = CONFERENCIA.chave, cs = CONFERENCIA.f.modo === 'csond', ehPis = CONFERENCIA.f.aba === 'pis';
+  const depois = CONFERENCIA.f.depois;
   if (ehPis) n = juntarPisLidos();
   fecharConferencia();
   if (ehPis) {
@@ -13305,6 +13344,7 @@ function aplicarConferencia() {
       <b>Salvar cadastro</b> (lá embaixo) para guardar neste aparelho.</span></div>`);
     return;
   }
+  if (typeof depois === 'function') { try { depois(); } catch (e) { console.warn(e); } }   // ex.: SPT — camadas pela coluna Material
   if (cs) montarCsond();
   if (typeof montarDados === 'function') montarDados();
   atualizar();
@@ -15339,33 +15379,150 @@ const FICHAS_SLAB = [
 /* Boletim por percussão (SPT, NBR 6484): a ficha do campo quando a aba Boletim está em "Percussão".
    Folha 1: o furo, os métodos, a lavagem por tempo e as camadas; folha 2: os golpes, metro a metro. */
 const SPT_COLS = ['g.0', 'p.0', 'g.1', 'p.1', 'g.2', 'p.2'];
-const FICHA_SLAB_SPT = { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2P', titulo: 'Sondagem a percussão — SPT (NBR 6484)', compacta: true, densa: true, apertada: true,
- nota: 'A foto pode ser também o boletim de campo do próprio sondador, em outro modelo: ache cada dado pelo rótulo (profundidade, cota, N.A., camadas de/até com a descrição do material, final do furo; golpes de cada metro em três trechos de 15 cm — se o boletim trouxer 1º/2º/3º golpes ou "golpes/cm", ponha golpes em g e cm em p). Na descrição da camada, separe material (ex.: "Argila arenosa"), complemento (ex.: "com pedregulhos") e cor (ex.: "Marrom"). Nível d\'água: uma linha por leitura (pode haver leituras em dias diferentes). ' + LETRA_DIFICIL,
+/* listas do boletim SPT / permeabilidade (modelos NACON Mod042a e Mod045) — aqui porque este arquivo carrega antes do app-campo.js */
+const TEMPOS_NA_APOS = [['t5', '5 min.'], ['t10', '10 min.'], ['t15', '15 min.'], ['t20', '20 min.'], ['t25', '25 min.'], ['t30', '30 min.'], ['t24', '24 hs']];
+const TEMPOS_CLIMA = [['chuva intensa', 'Chuva intensa'], ['chuva', 'Chuva'], ['chuva pouco', 'Chuva pouco'], ['seco', 'Seco']];
+const CRITERIOS_PERCUSSAO = [['1', '1 — 10 m sucessivos com NSPT ≥ 25'], ['2', '2 — 8 m sucessivos com NSPT ≥ 30'], ['3', '3 — 6 m sucessivos com NSPT ≥ 35']];
+const REALIZADO_PERM = [['abaixo', 'Abaixo do N.A.'], ['acima', 'Acima do N.A.'], ['artesianismo', 'Com artesianismo']];
+const MEDIDA_PERM = [['tambor', 'Rebaixamento — tambor (Ø 55,5 cm)'], ['revestimento', 'Rebaixamento — revestimento'], ['hidrometro', 'Hidrômetro'], ['proveta', 'Proveta']];
+const SPT_LINHAS_FICHA = 20;
+const SPT_CAMPOS_LINHA = ['rev', 'g.0', 'p.0', 'g.1', 'p.1', 'g.2', 'p.2', 'tq', 'tr', 'mud', 'mat', 'compl', 'cor', 'geo'];
+const SPT_TEXTO = ['mat', 'compl', 'cor', 'geo'];
+const NA_DURANTE = ['data', 'hora', 'na', 'rev', 'prof'];
+const PARADAS_FICHA_SPT = [['plano', 'Limite de sondagem'], ['amostrador', 'Impenetrável à percussão'], ['lavagem', 'Impenetrável à lavagem']];
+/* blocos de cada folha do rascunho SPT (a leitura por foto de cada folha usa só os seus) */
+const FOLHA1_SPT = [0, 1, 2, 3, 4], FOLHA2_SPT = [5, 6, 7, 8, 9];
+const permLigada = () => !!(estado.slab && estado.slab.bol && estado.slab.bol.perm && estado.slab.bol.perm.ativo);
+const BLOCOS_SPT_F1 = [
+  { tipo: 'campos', titulo: 'Furo', campos: [fAt('Data', 'sptData', _sl('bol.data'), 'data'), fAt('Início (hora)', 'sptHIni', _sl('bol.horaIni'), 'texto'),
+    fAt('Término (hora)', 'sptHFim', _sl('bol.horaFim'), 'texto'), fAt('Cota do furo (m)', 'sptCota', _sl('bol.cota')), fAt('RN', 'sptRn', _sl('bol.rn'), 'texto'),
+    fAt('Profund. — profundidade final do furo (m)', 'sptProf', _sl('bol.prof')),
+    fMarcar('Tempo', 'sptTempo', _sl('bol.tempo'), { lista: TEMPOS_CLIMA, outro: false }),
+    fMarcar('Critério de paralização', 'sptFinal', _sl('bol.parada'), () => ({ lista: PARADAS_FICHA_SPT })),
+    fMarcar('Impenetrável à percussão — critério 1, 2 ou 3', 'sptCrit', _sl('bol.paradaCrit'), { lista: [['1', '1'], ['2', '2'], ['3', '3']], outro: false })] },
+  { tipo: 'grade', titulo: 'N.A. durante a perfuração', add: '#bolNaMais', colunas: ['Dia', 'Hora', 'Prof. N.A. (m)', 'Prof. revest. (m)', 'Prof. sondagem (m)'],
+    idx: [0, 1, 2, 3, 4], tipos: ['data', 'texto', 'num', 'num', 'num'],
+    linhas: [0, 1, 2, 3].map(k => [`Leitura ${k + 1}`, c => `bol.naLeituras.${k}.${NA_DURANTE[c]}`, 'num', '', c => _sl(`bol.naLeituras.${k}.${NA_DURANTE[c]}`)]) },
+  { tipo: 'campos', titulo: 'Após o término', campos: [fAt('Após término — dia', 'naApDia', _sl('bol.naApos.dia'), 'data'), fAt('Após término — hora', 'naApHora', _sl('bol.naApos.hora'), 'texto')] },
+  { tipo: 'grade', titulo: 'N.A. após o término — prof. (m)', colunas: TEMPOS_NA_APOS.map(t => t[1]), idx: TEMPOS_NA_APOS.map((_, i) => i),
+    linhas: [['Prof. (m)', c => `bol.naApos.${TEMPOS_NA_APOS[c][0]}`, 'num', '', c => _sl(`bol.naApos.${TEMPOS_NA_APOS[c][0]}`)]] },
+  { tipo: 'grade', titulo: 'Ensaio do SPT — uma linha por metro', add: '#bolSptMais',
+    colunas: ['Prof. revest. (m)', '1º /15 cm golpes', '1º cm', '2º /15 cm golpes', '2º cm', '3º /15 cm golpes', '3º cm', 'Torque máx. (kgf.m)', 'Torque resid. (kgf.m)', 'Mudança de camada (m)', 'Material', 'Complemento', 'Cor', 'Interp. geológica'],
+    idx: SPT_CAMPOS_LINHA.map((_, i) => i), tipos: SPT_CAMPOS_LINHA.map(k => SPT_TEXTO.includes(k) ? 'texto' : 'num'),
+    linhas: Array.from({ length: SPT_LINHAS_FICHA }, (_, i) => [`Amostra ${i + 1} (${i + 1},00 a ${i + 1},45 m)`, c => `bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`, 'num', '', c => _sl(`bol.spt.${i}.${SPT_CAMPOS_LINHA[c]}`)]) },
+];
+const BLOCOS_SPT_F2 = [
+  { tipo: 'campos', titulo: 'Permeabilidade — ensaio', quebra: true, add: '#bolPermLigar', campos: [fAt('Ensaio nº', 'pmNum', _sl('bol.perm.numero'), 'texto'),
+    fAt('Data do ensaio', 'pmData', _sl('bol.perm.data'), 'data'), fAt('Prof. (m)', 'pmProf', _sl('bol.perm.prof')), fAt('Revestimento', 'pmRev', _sl('bol.perm.revest'), 'texto'),
+    fAt('Hora de início', 'pmHIni', _sl('bol.perm.horaIni'), 'texto'), fAt('Hora de término', 'pmHFim', _sl('bol.perm.horaFim'), 'texto'),
+    fMarcar('Ensaio realizado', 'pmReal', _sl('bol.perm.realizado'), { lista: REALIZADO_PERM, outro: false }),
+    fMarcar('Condições de medidas', 'pmMed', _sl('bol.perm.medida'), { lista: MEDIDA_PERM, outro: false })] },
+  { tipo: 'campos', titulo: 'Permeabilidade — geometria', add: '#bolPermLigar', campos: [fAt('Boca do revestimento acima do terreno (m)', 'pmBoca', _sl('bol.perm.alturaBoca')),
+    fAt('N.A. antes do ensaio (m)', 'pmNaA', _sl('bol.perm.naAntes')), fAt('N.A. adotado (m)', 'pmNaD', _sl('bol.perm.naAdotado')),
+    fAt('Ø int. tubo (cm)', 'pmDTubo', _sl('bol.perm.dTubo')), fAt('Prof. da sapata (m)', 'pmSap', _sl('bol.perm.sapata')),
+    fAt('Ø int. furo (cm)', 'pmDFuro', _sl('bol.perm.dFuro')), fAt('Trecho ensaiado — sapata ao fundo (m)', 'pmTre', _sl('bol.perm.trecho'))] },
+  { tipo: 'grade', titulo: 'Carga constante', add: '#bolPermLigar', colunas: ['Hora', 'Nível de água no tambor (cm)'], idx: [0, 1], tipos: ['texto', 'num'],
+    linhas: Array.from({ length: 8 }, (_, i) => [`Leitura ${i + 1}`, c => `bol.perm.cc.${i}.${c ? 'leit' : 'hora'}`, 'num', '', c => _sl(`bol.perm.cc.${i}.${c ? 'leit' : 'hora'}`)]) },
+  { tipo: 'grade', titulo: 'Carga variável', add: '#bolPermLigar', colunas: ['Hora', 'Altura da água no tubo (m)'], idx: [0, 1], tipos: ['texto', 'num'],
+    linhas: Array.from({ length: 8 }, (_, i) => [`Leitura ${i + 1}`, c => `bol.perm.cv.${i}.${c ? 'alt' : 'hora'}`, 'num', '', c => _sl(`bol.perm.cv.${i}.${c ? 'alt' : 'hora'}`)]) },
+  { tipo: 'campos', titulo: 'Permeabilidade — resultado', add: '#bolPermLigar', campos: [fAt('Coeficiente de permeabilidade — carga constante', 'pmKcc', _sl('bol.perm.kCC'), 'texto'),
+    fAt('Coeficiente de permeabilidade — carga variável', 'pmKcv', _sl('bol.perm.kCV'), 'texto'), fAt('Observações (permeabilidade)', 'pmObs', _sl('bol.perm.obs'), 'texto', 3),
+    fAt('Operador', 'pmOper', _sl('bol.perm.operador'), 'texto')] },
+];
+const FICHA_SLAB_SPT = { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2P', titulo: 'Boletim de sondagem à percussão (NBR 6484)',
+  nota: 'Modelo NACON (Mod042a), deitado. Cada linha da tabela grande é uma amostra (um metro): prof. do revestimento, golpes em três trechos de 15 cm '
+    + '(se o quadro trouxer "golpes/cm", ex.: 30/12, golpes em g e cm em p; sem barra, cm fica vazio), torque máximo e residual, mudança de camada (m) e a descrição '
+    + 'em quatro colunas — material (ex.: "Argila arenosa"), complemento (ex.: "com pedregulhos"), cor (ex.: "Vermelha") e interp. geológica (sigla: SO, SM, AT, AL, CO, ST, SR, SAR, SP, RC) — '
+    + 'cada uma na linha em que foi escrita, como está. Siglas no material: LV = início da lavagem, NR = amostra não recuperada, BT = betonita. '
+    + 'N.A. durante a perfuração: cada coluna da tabela é uma leitura (dia, hora, prof. N.A., prof. revest., prof. sondagem). Após o término: a profundidade do N.A. em cada tempo. '
+    + 'Se houver a 2ª folha (ensaio de permeabilidade, Mod045), leia também. ' + LETRA_DIFICIL,
   quando: () => !!(estado.slab && estado.slab.bol && estado.slab.bol.tipo === 'spt'),
-  cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]], repeteCab: ['sondador'], repete: ['sptVerif'],
-  blocos: [
-    { tipo: 'campos', titulo: 'Furo', campos: [fAt('Início', 'sptInicio', _sl('bol.data'), 'data'), fAt('Fim', 'sptFim', _sl('bol.dataFim'), 'data'),
-      fAt('Verificação', 'sptVerif', _sl('bol.verificacao'), 'texto'),
-      fAt('Profundidade do furo (m)', 'sptProf', _sl('bol.prof')), fAt('Cota (m)', 'sptCota', _sl('bol.cota')),
-      fMarcar('Nível d\'água', 'sptSeco', _sl('bol.naSeco'), NA_MARCAR),
-      fMarcar('Final do furo', 'sptFinal', _sl('bol.parada'), () => ({ lista: PARADAS_SPT }), 3),
-      fAt('Observações', 'sptObs', _sl('bol.obs'), 'texto', 3)] },
-    { tipo: 'grade', par: true, titulo: 'Método de perfuração (m)', colunas: ['Início', 'Término'], idx: [0, 1],
-      linhas: [['T. cavadeira', 'cavadeira'], ['T. espiral/concha', 'espiral'], ['Lavagem', 'lavagem']].map(([rot, k]) =>
-        [rot, c => `bol.metodos.${k}.${c ? 'ate' : 'de'}`, 'num', 'm', c => _sl(`bol.metodos.${k}.${c ? 'ate' : 'de'}`)]) },
-    { tipo: 'grade', par: true, titulo: 'Lavagem por tempo — 30 min', colunas: ['Prof. (m)'], idx: [0],
-      linhas: [['Prof. início', 'inicio'], ['Estágio 1', 'e1'], ['Estágio 2', 'e2'], ['Estágio 3', 'e3']].map(([rot, k]) =>
-        [rot, () => `bol.lavTempo.${k}`, 'num', 'm', () => _sl(`bol.lavTempo.${k}`)]) },
-    { tipo: 'grade', titulo: 'Camadas (descrição do material, de cima para baixo)', add: '#bolCamada',
-      colunas: ['De (m)', 'Até (m)', 'Material', 'Complemento', 'Cor', 'Interp. geol.'], idx: [0, 1, 2, 3, 4, 5],
-      tipos: ['num', 'num', 'texto', 'texto', 'texto', 'texto'], larguras: [12, 7.5, 7.5, 27, 19, 14, 13],
-      linhas: CAMADAS_FICHA.map(k => [`Camada ${k + 1}`, c => `bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'geo'][c]}`, 'num', '',
-        c => _sl(`bol.camadas.${k}.${['de', 'ate', 'material', 'compl', 'cor', 'geo'][c]}`)]) },
-    { ...GRADE_NA, quebra: true },
-    { tipo: 'grade', titulo: 'Golpes por metro — penetração (cm) em branco = 15', add: '#bolSptMais',
-      colunas: ['1º golpes', 'cm', '2º golpes', 'cm', '3º golpes', 'cm'], idx: [0, 1, 2, 3, 4, 5],
-      linhas: Array.from({ length: 20 }, (_, i) => [`${i + 1},00 m`, c => `bol.spt.${i}.${SPT_COLS[c]}`, 'num', '', c => _sl(`bol.spt.${i}.${SPT_COLS[c]}`)]) },
-  ] };
+  cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]], repeteCab: ['sondador'], repete: [],
+  get blocos() { return permLigada() ? [...BLOCOS_SPT_F1, ...BLOCOS_SPT_F2] : BLOCOS_SPT_F1; },
+  desenho: ctx => desenhoFichaSpt(ctx),
+  // lido o rascunho: sem camadas lançadas, a coluna Material (com a mudança de camada) vira as camadas do boletim
+  depois: () => { const b = estado.slab && estado.slab.bol; if (!b || (b.camadas || []).length) return;
+    const cs = typeof camadasDasLinhasSpt === 'function' ? camadasDasLinhasSpt(b) : []; if (cs.length) { b.camadas = cs; montarSlab(); } } };
+
+/** O rascunho do SPT no desenho da NACON (Mod042a, uma folha deitada) e, com o ensaio ligado, a folha do Mod045. */
+function desenhoFichaSpt({ V, CB, cls, logo, valor }) {
+  const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
+  const end = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
+  let d = {}; try { if (estado.slab && typeof dadosBoletimDoEnsaio === 'function') d = dadosBoletimDoEnsaio() || {}; } catch (e) { d = {}; }
+  const pre = t => t ? `<span class="pre">${atr(t)}</span>` : '';
+  const sa = t => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  const cx = (c, op) => { const v = valor(c); return `<b class="cx">${v !== undefined && v !== null && sa(v) !== '' && (sa(v) === sa(op[0]) || sa(v) === sa(op[1])) ? `<span class="${cls}">X</span>` : ''}</b>`; };
+  const q = (c, extra = '') => `<div class="q ${extra}">${V(c)}</div>`;
+  const perm = permLigada(), total = perm ? 2 : 1;
+  const cabTopo = (titulo, n) => `<div class="nc-topo">${logo ? `<img src="${logo}" alt="">` : '<b>NACON</b>'}<div class="nc-end">${end.map(atr).join('<br>')}</div></div>
+    <div class="nc-tit"><span>RASCUNHO</span><b>${titulo}</b><em>${FICHA_SLAB_SPT.codigo} · ${n}/${total}</em></div>`;
+  const na = (k, c) => `<td>${V(`bol.naLeituras.${k}.${c}`)}</td>`;
+  const linhas = Array.from({ length: SPT_LINHAS_FICHA }, (_, i) => {
+    const g = k => { const gv = V(`bol.spt.${i}.g.${k}`), pv = V(`bol.spt.${i}.p.${k}`); return `<td class="gp">${gv}${pv ? `<small>/${pv}</small>` : ''}</td>`; };
+    return `<tr><td>${V(`bol.spt.${i}.rev`)}</td><td class="pi">${i + 1}</td><td class="pi">${i + 1},00</td><td class="pi">${i + 1},45</td>${g(0)}${g(1)}${g(2)}
+      <td>${V(`bol.spt.${i}.tq`)}</td><td>${V(`bol.spt.${i}.tr`)}</td><td>${V(`bol.spt.${i}.mud`)}</td>${SPT_TEXTO.map(k => `<td class="mat">${V(`bol.spt.${i}.${k}`)}</td>`).join('')}</tr>`; }).join('');
+  const f1 = `<section class="pg nc paisagem">${cabTopo('BOLETIM DE SONDAGEM À PERCUSSÃO', 1)}
+    <div class="nc-cab">
+      <table class="nc-id"><tr><td colspan="3"><span>Cliente:</span> ${pre(d.cliente)}</td></tr>
+        <tr><td colspan="2"><span>Obra:</span> ${pre(d.obra)}</td><td><span>Local:</span> ${pre(d.local)}</td></tr>
+        <tr><td><span>Prefixo da Obra:</span> ${pre(d.prefixo || 'NE-')}</td><td><span>Nº do Furo:</span><div class="q">${CB('st')}</div></td><td><span>Cota do Furo:</span>${q('sptCota')}<span>RN:</span>${q('sptRn')}</td></tr>
+        <tr><td><span>Data:</span>${q('sptData')}</td><td><span>Início:</span>${q('sptHIni')}</td><td><span>Término:</span>${q('sptHFim')}</td></tr>
+        <tr><td colspan="3" class="nc-tempo"><span>Tempo:</span> ${TEMPOS_CLIMA.map(o => `<i>${cx('sptTempo', o)} ${o[1].toLowerCase()}</i>`).join('')}</td></tr></table>
+      <div class="nc-na">
+        <table><tr><th colspan="5">Profundidade do N.A. durante a perfuração</th></tr>
+          ${[['Dia', 'data'], ['Hora', 'hora'], ['Prof. N.A.', 'na'], ['Prof. Revest.', 'rev'], ['Prof. Sondag.', 'prof']].map(([r, c]) => `<tr><th>${r}</th>${[0, 1, 2, 3].map(k => na(k, c)).join('')}</tr>`).join('')}</table>
+        <table class="nc-apos"><tr><th colspan="${TEMPOS_NA_APOS.length + 1}">Após término — Dia: <span class="q in">${V('naApDia')}</span> Hora: <span class="q in">${V('naApHora')}</span></th></tr>
+          <tr><th>Tempo</th>${TEMPOS_NA_APOS.map(t => `<th>${t[1]}</th>`).join('')}</tr>
+          <tr><th>Prof. (m)</th>${TEMPOS_NA_APOS.map(t => `<td>${V(`bol.naApos.${t[0]}`)}</td>`).join('')}</tr></table>
+      </div></div>
+    <table class="nc-spt"><colgroup><col style="width:6%"><col style="width:4.5%"><col style="width:5%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:5.5%"><col style="width:5.5%"><col style="width:6.5%"><col style="width:16%"><col style="width:12%"><col style="width:8%"><col style="width:7.5%"></colgroup>
+      <thead><tr><th rowspan="2">Prof. do Revest. (m)</th><th rowspan="2">Nº da amostra</th><th colspan="5">Ensaio do SPT</th><th colspan="2">Torque (kgf.m)</th><th rowspan="2">Mudança de Camada (m)</th><th colspan="4" class="sond">Sondador: <span class="q in larga">${CB('sondador')}</span></th></tr>
+        <tr><th>De (m)</th><th>Para (m)</th><th>golpes /15 cm</th><th>golpes /15 cm</th><th>golpes /15 cm</th><th>Máx.</th><th>Resid.</th><th>MATERIAL</th><th>COMPLEMENTO</th><th>COR</th><th>INTERP. GEOL.</th></tr></thead>
+      <tbody>${linhas}</tbody></table>
+    <div class="nc-rod">
+      <div class="nc-crit"><b>Critérios de paralização</b>
+        <div><i>${cx('sptFinal', PARADAS_FICHA_SPT[0])} <b>Limite de sondagem:</b> quando houver paralização por profundidade</i></div>
+        <div><i>${cx('sptFinal', PARADAS_FICHA_SPT[1])} <b>Impenetrável à percussão:</b></i>
+          ${[['1', '10 m sucessivos NSPT ≥ 25'], ['2', '8 m sucessivos NSPT ≥ 30'], ['3', '6 m sucessivos NSPT ≥ 35']].map(o => `<i>${o[0]} ${cx('sptCrit', o)} ${o[1]}</i>`).join('')}</div>
+        <div><i>${cx('sptFinal', PARADAS_FICHA_SPT[2])} <b>Impenetrável à lavagem:</b> sem avanço acima de 5 cm a cada 10 min de lavagem durante 30 min</i></div></div>
+      <div class="nc-leg">LV — início lavagem · NR — amostra não recuperada · BT — betonita<br>
+        <small>Interp. geol.: SO solo orgânico · SM sed. marinhos · AT aterro · AL aluvionares · CO coluvionares · ST terciários · SR residual de rocha · SAR alteração de rocha · SP saprolito · RC rocha</small><br><small>Golpes com penetração diferente de 15 cm: escreva golpes/cm (ex.: 30/12)</small></div>
+      <div class="nc-prof"><span>Profund. (m):</span>${q('sptProf')}</div></div>
+    <footer>${FICHA_SLAB_SPT.codigo} · folha 1 de ${total} · fotografe a folha inteira, deitada, de frente, com boa luz${perm ? ' — leia as 2 folhas juntas' : ''}</footer></section>`;
+  if (!perm) return f1;
+  const lt = (k, i, c) => `<td>${V(`bol.perm.${k}.${i}.${c}`)}</td>`;
+  const f2 = `<section class="pg nc perm">${cabTopo('ENSAIO DE PERMEABILIDADE EM FURO DE SONDAGEM — INFILTRAÇÃO À CARGA CONSTANTE E VARIÁVEL', 2)}
+    <table class="nc-id"><tr><td colspan="2"><span>Cliente:</span> ${pre(d.cliente)}</td><td><span>Data:</span>${q('pmData')}</td><td><span>Prefixo da Obra:</span> ${pre(d.prefixo)}</td></tr>
+      <tr><td colspan="2"><span>Local:</span> ${pre(d.local)}</td><td><span>Furo Nº:</span><div class="q">${CB('st')}</div></td><td><span>Ensaio Nº:</span>${q('pmNum')}</td></tr>
+      <tr><td colspan="2"><span>Obra:</span> ${pre(d.obra)}</td><td><span>Prof. (m):</span>${q('pmProf')}</td><td><span>Hora de início:</span>${q('pmHIni')}</td></tr>
+      <tr><td colspan="3"><span>Revestimento:</span>${q('pmRev')}</td><td><span>Hora de término:</span>${q('pmHFim')}</td></tr></table>
+    <div class="nc-perm">
+      <div>
+        <h4>Ensaio realizado</h4>${REALIZADO_PERM.map(o => `<div class="op">${cx('pmReal', o)} ${o[1]}</div>`).join('')}
+        <h4>Condições de medidas</h4>${MEDIDA_PERM.map(o => `<div class="op">${cx('pmMed', o)} ${o[1]}</div>`).join('')}
+        <h4>Geometria</h4>
+        <div class="geo">
+          <svg viewBox="0 0 60 150" aria-hidden="true"><line x1="0" y1="28" x2="60" y2="28" stroke="#000" stroke-width="1.2"/><text x="1" y="25" font-size="5">TERRENO</text>
+            <rect x="22" y="6" width="16" height="92" fill="none" stroke="#000"/><line x1="22" y1="98" x2="38" y2="98" stroke="#000" stroke-width="2"/><text x="40" y="100" font-size="5">SAPATA</text>
+            <line x1="5" y1="62" x2="55" y2="62" stroke="#000" stroke-dasharray="2 2"/><text x="1" y="59" font-size="5">N.A.</text>
+            <rect x="19" y="98" width="22" height="42" fill="none" stroke="#000" stroke-dasharray="3 2"/><text x="14" y="148" font-size="5">FUNDO DO FURO</text></svg>
+          <div class="geo-c">
+            <div><span>Boca do revestimento acima do terreno</span>${q('pmBoca')}<em>m</em></div>
+            <div><span>N.A. antes do ensaio</span>${q('pmNaA')}<em>m</em></div><div><span>N.A. adotado</span>${q('pmNaD')}<em>m</em></div>
+            <div><span>Ø int. tubo</span>${q('pmDTubo')}<em>cm</em></div><div><span>Prof. da sapata</span>${q('pmSap')}<em>m</em></div>
+            <div><span>Ø int. furo</span>${q('pmDFuro')}<em>cm</em></div><div><span>Trecho ensaiado (sapata ao fundo)</span>${q('pmTre')}<em>m</em></div></div></div>
+      </div>
+      <div>
+        <h4>Carga constante</h4><table class="nc-lt"><tr><th>Hora</th><th>Leitura do nível de água no tambor (cm)</th></tr>${Array.from({ length: 8 }, (_, i) => `<tr>${lt('cc', i, 'hora')}${lt('cc', i, 'leit')}</tr>`).join('')}</table>
+        <div class="kperm"><span>Coeficiente de permeabilidade:</span>${q('pmKcc')}</div>
+        <h4>Carga variável</h4><table class="nc-lt"><tr><th>Hora</th><th>Altura da água no tubo (m)</th></tr>${Array.from({ length: 8 }, (_, i) => `<tr>${lt('cv', i, 'hora')}${lt('cv', i, 'alt')}</tr>`).join('')}</table>
+        <div class="kperm"><span>Coeficiente de permeabilidade:</span>${q('pmKcv')}</div>
+      </div></div>
+    <div class="nc-obs"><span>Observações:</span>${q('pmObs', 'alta')}</div>
+    <div class="nc-ass"><div><span>Operador:</span>${q('pmOper')}</div><div><span>Responsável:</span> ${pre(S.responsavel || M.responsavel || '')}${S.crea || M.crea ? `<br><small>${atr(S.crea || M.crea)}</small>` : ''}</div></div>
+    <footer>${FICHA_SLAB_SPT.codigo} · folha 2 de 2 · ensaio de permeabilidade (Mod045) · fotografe a folha inteira, de frente, com boa luz</footer></section>`;
+  return f1 + f2;
+}
 
 if (typeof FICHAS_OUTRAS !== 'undefined') FICHAS_OUTRAS.push(...FICHAS_SLAB, FICHA_SLAB_SPT);
 
@@ -27845,12 +28002,59 @@ function svgPerfilBoletim(camadas, profFuro, so) {
    · do ponto do plano (o que o campo marcou no celular), para completar o que faltar.
    ------------------------------------------------------------ */
 const CAMPOS_BOL = ['data', 'sondador', 'prof', 'relevo', 'vegetacao', 'terreno', 'na', 'naSeco', 'parada', 'cota', 'outras', 'obs',
-  'tipo', 'dataFim', 'naHora', 'verificacao', 'revisao', 'contrato', 'cidade'];
-const OBJETOS_BOL = ['spt', 'metodos', 'lavTempo', 'naLeituras'];     // só do ensaio (o campo não tem): passam inteiros
+  'tipo', 'dataFim', 'naHora', 'verificacao', 'revisao', 'contrato', 'cidade', 'horaIni', 'horaFim', 'rn', 'tempo', 'paradaCrit'];
+const OBJETOS_BOL = ['spt', 'metodos', 'lavTempo', 'naLeituras', 'naApos', 'perm'];     // só do ensaio (o campo não tem): passam inteiros
 const vazioBol = () => ({ data: '', sondador: '', prof: null, relevo: '', vegetacao: '', terreno: '', na: null, naSeco: '', parada: '', cota: null,
   outras: '', obs: '', camadas: [], tipo: 'trado', dataFim: '', naHora: '', verificacao: '', revisao: '', contrato: '', cidade: '', spt: [],
   metodos: { cavadeira: { de: null, ate: null }, espiral: { de: null, ate: null }, lavagem: { de: null, ate: null } },
-  lavTempo: { inicio: null, e1: null, e2: null, e3: null }, naLeituras: [] });
+  lavTempo: { inicio: null, e1: null, e2: null, e3: null }, naLeituras: [],
+  horaIni: '', horaFim: '', rn: '', tempo: '', paradaCrit: '', naApos: naAposVazio(), perm: permVazio() });
+/* Modelo NACON (Mod042a): N.A. depois do término (5 a 30 min e 24 h) */
+function naAposVazio() { return { dia: '', hora: '', t5: null, t10: null, t15: null, t20: null, t25: null, t30: null, t24: null }; }
+/* Ensaio de permeabilidade em furo de sondagem (Mod045 — infiltração à carga constante e variável): opcional, por furo */
+const LINHAS_PERM = 8;
+function permVazio() {     // literais: roda na carga do app, antes das constantes daqui
+  return { ativo: false, numero: '', data: '', prof: null, horaIni: '', horaFim: '', revest: '', realizado: '', medida: '',
+    alturaBoca: null, naAntes: null, naAdotado: null, sapata: null, trecho: null, dTubo: null, dFuro: null,
+    cc: Array.from({ length: 8 }, () => ({ hora: '', leit: null })), kCC: '',
+    cv: Array.from({ length: 8 }, () => ({ hora: '', alt: null })), kCV: '', obs: '', operador: '' };
+}
+const permPreenchida = pm => !!pm && pm.ativo && [pm.prof, pm.alturaBoca, pm.naAntes, pm.sapata, pm.trecho, pm.kCC, pm.kCV, pm.horaIni].some(temValor)
+  || !!pm && pm.ativo && [...(pm.cc || []), ...(pm.cv || [])].some(l => temValor(l.hora) || ehNumero(l.leit) || ehNumero(l.alt));
+/** Rascunho NACON: "Mudança de camada (m)" e "Material" escritos na linha do metro viram as camadas do boletim. */
+function camadasDasLinhasSpt(b) {
+  // cada linha pode trazer material, complemento, cor e interp. geológica; a camada fecha na linha com a mudança (m)
+  const cs = [], linhas = b.spt || [], txt = v => String(v ?? '').trim();
+  let de = 0, pend = null;
+  const junta = (a, x) => a && x && !a.includes(x) ? a + ' ' + x : (a || x);
+  const fecha = ate => {
+    if (!pend) return;
+    const sep = pend.compl || pend.cor ? { material: pend.mat, compl: pend.compl, cor: pend.cor } : separarMaterial(pend.mat);
+    const sa = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    const mapa = typeof GEO_SPT !== 'undefined' ? GEO_SPT : [], g = sa(pend.geo);
+    const geo = g ? (mapa.find(([k, t]) => k === g || sa(t) === g || g.startsWith(k + ' ')) || [txt(pend.geo)])[0] : '';
+    cs.push({ de, ate, material: sep.material || pend.mat, compl: sep.compl || '', cor: sep.cor || '', umidade: '', geo });
+    pend = null;
+  };
+  linhas.forEach(l => {
+    const v = { mat: txt(l.mat), compl: txt(l.compl), cor: txt(l.cor), geo: txt(l.geo) };
+    if (v.mat || v.compl || v.cor || v.geo) pend = pend ? { mat: junta(pend.mat, v.mat), compl: junta(pend.compl, v.compl), cor: pend.cor || v.cor, geo: pend.geo || v.geo } : v;
+    if (ehNumero(l.mud)) { if (pend) fecha(l.mud); de = l.mud; }
+  });
+  if (pend) fecha(ehNumero(b.prof) ? b.prof : (linhas.length ? linhas.length + 0.45 : null));
+  return cs;
+}
+/** "Argila arenosa, vermelha, com pedregulhos" → material da lista + cor da lista + o resto em complemento. */
+function separarMaterial(t) {
+  const sa = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  let resto = String(t || '').trim(), material = '', cor = '';
+  const m = [...MATERIAIS_SOLO].sort((a, b) => b.length - a.length).find(x => sa(resto).startsWith(sa(x)));
+  if (m) { material = m; resto = resto.slice(m.length); }
+  const c = [...CORES_SOLO].sort((a, b) => b.length - a.length).find(x => sa(resto).includes(sa(x)) || sa(resto).includes(sa(x).replace(/A$/, 'O')));
+  if (c) { cor = c; const k = sa(resto).search(new RegExp(sa(c).replace(/A$/, '[AO]'))); if (k >= 0) resto = resto.slice(0, k) + resto.slice(k + c.length); }
+  resto = resto.replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').replace(/\s*,\s*,/g, ',').replace(/\s{2,}/g, ' ');
+  return { material: material || String(t || '').trim(), compl: material ? resto : '', cor, umidade: '' };
+}
 /* Um boletim por furo (furo deslocado): estado.slab.bol é o do furo que está na tela (bolFuro);
    os dos outros furos ficam em estado.slab.bolOutros = { n: bol }. */
 function furosDoEnsaio() {
@@ -28312,20 +28516,89 @@ const CSS_SPT = `
   .folha.nspt .assspt .lg{text-align:right;width:40mm} .folha.nspt .assspt .lg img{height:11mm}
   .folha.nspt .nota{font-size:5.6pt;padding:.6mm 1.2mm;border-top:.35mm solid #000} .folha.nspt .endspt{font-size:6.4pt;font-weight:700;padding:.6mm 1.2mm 1mm}`;
 
+/** As folhas de um furo: o boletim, o ensaio de permeabilidade (se ligado e lançado) e as fotos (só no último furo). */
+function folhasDoFuroBol(d, fotos = []) {
+  const spt = d.bol.tipo === 'spt', perm = spt && permPreenchida(d.bol.perm), n = 1 + (perm ? 1 : 0) + (fotos.length ? 1 : 0);
+  const sp = k => spt ? `${k} / ${n}` : (n === 1 ? 'Única' : `${k}/${n}`);
+  const out = [spt ? htmlFolhaSpt(d, sp(1)) : htmlFolhaBoletim(d, sp(1))];
+  if (perm) out.push(htmlFolhaPerm(d, `2/${n}`));
+  if (fotos.length) out.push(htmlFolhaFotosBol(d.estaca || (d.p && d.p.st), d.cliente, fotos, `${n}/${n}`));
+  return out;
+}
+
+/** Folha do ensaio de permeabilidade (infiltração à carga constante e variável — modelo Mod045 da NACON). */
+function htmlFolhaPerm(d, folhaTxt = '2/2') {
+  const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
+  const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
+  const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
+  const pm = { ...permVazio(), ...(d.bol.perm || {}) }, v = (x, c = 2) => ehNumero(x) ? fmt(x, c) : '', t = x => atr(x || '');
+  const xis = (atual, k) => `<span class="cxp">${atual === k ? 'X' : ''}</span>`;
+  const resp = S.responsavel || M.responsavel || '', crea = S.crea || M.crea || '';
+  const linhasT = (lista, campo, casas) => (lista || []).filter(l => temValor(l.hora) || ehNumero(l[campo])).map(l => `<tr><td>${t(l.hora)}</td><td>${v(l[campo], casas)}</td></tr>`).join('')
+    || '<tr><td>&nbsp;</td><td></td></tr>';
+  return `<div class="folha nbol nperm">
+    <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
+    <div class="titulo">ENSAIOS DE PERMEABILIDADE EM FURO DE SONDAGEM<br><small>TIPO: INFILTRAÇÃO À CARGA CONSTANTE E VARIÁVEL</small></div>
+    <table class="pid">
+      <tr><td><span>Cliente:</span> ${t(d.cliente)}</td><td><span>Data:</span> ${pm.data ? dataBrSl(pm.data) : ''}</td><td><span>Prefixo da Obra:</span> ${t(d.prefixo)}</td></tr>
+      <tr><td><span>Local:</span> ${t(d.local)}</td><td><span>Furo N.º:</span> <b>${t(d.estaca || (d.p && d.p.st))}</b></td><td><span>Ensaio N.º:</span> ${t(pm.numero)}</td></tr>
+      <tr><td><span>Obra:</span> ${t(d.obra)}</td><td><span>Prof.:</span> ${v(pm.prof)}${ehNumero(pm.prof) ? ' m' : ''}</td><td><span>Hora de início:</span> ${t(pm.horaIni)}</td></tr>
+      <tr><td colspan="2"><span>Revestimento:</span> ${t(pm.revest)}</td><td><span>Hora de término:</span> ${t(pm.horaFim)}</td></tr></table>
+    <div class="pcorpo">
+      <div class="pesq">
+        <div class="ph">ENSAIO REALIZADO</div>${REALIZADO_PERM.map(([k, r]) => `<div class="pop">${r}${xis(pm.realizado, k)}</div>`).join('')}
+        <div class="ph">CONDIÇÕES DE MEDIDAS</div>${MEDIDA_PERM.map(([k, r]) => `<div class="pop">${r}${xis(pm.medida, k)}</div>`).join('')}
+        <div class="ph">GEOMETRIA DO ENSAIO</div>
+        <div class="pgeo"><svg viewBox="0 0 70 170" aria-hidden="true">
+            <line x1="0" y1="32" x2="70" y2="32" stroke="#000" stroke-width="1.3"/><text x="45" y="28" font-size="5">TERRENO</text>
+            <rect x="27" y="8" width="16" height="100" fill="none" stroke="#000"/><text x="45" y="12" font-size="5">BOCA</text>
+            <line x1="27" y1="108" x2="43" y2="108" stroke="#000" stroke-width="2.2"/><text x="45" y="110" font-size="5">SAPATA</text>
+            <line x1="4" y1="70" x2="66" y2="70" stroke="#000" stroke-dasharray="2 2"/><text x="45" y="67" font-size="5">N.A.</text>
+            <rect x="24" y="108" width="22" height="48" fill="none" stroke="#000" stroke-dasharray="3 2"/><text x="16" y="166" font-size="5">FUNDO DO FURO</text></svg>
+          <table class="pg-v">
+            <tr><td>Boca do revestimento acima do terreno</td><td class="v">${v(pm.alturaBoca)} m</td></tr>
+            <tr><td>N.A. antes do ensaio</td><td class="v">${v(pm.naAntes)} m</td></tr><tr><td>N.A. adotado</td><td class="v">${v(pm.naAdotado)} m</td></tr>
+            <tr><td>Ø int. tubo</td><td class="v">${v(pm.dTubo)} cm</td></tr><tr><td>Profundidade da sapata</td><td class="v">${v(pm.sapata)} m</td></tr>
+            <tr><td>Ø int. furo</td><td class="v">${v(pm.dFuro)} cm</td></tr><tr><td>Trecho ensaiado (sapata ao fundo)</td><td class="v">${v(pm.trecho)} m</td></tr></table></div>
+      </div>
+      <div class="pdir">
+        <div class="ph">CARGA CONSTANTE</div>
+        <table class="plt"><tr><th>Hora</th><th>Leitura do nível de água no tambor (cm)</th></tr>${linhasT(pm.cc, 'leit', 1)}</table>
+        <div class="pk">Coeficiente de permeabilidade: <b>${t(pm.kCC)}</b></div>
+        <div class="ph">CARGA VARIÁVEL</div>
+        <table class="plt"><tr><th>Hora</th><th>Altura da água no tubo (m)</th></tr>${linhasT(pm.cv, 'alt', 2)}</table>
+        <div class="pk">Coeficiente de permeabilidade: <b>${t(pm.kCV)}</b></div>
+      </div></div>
+    <div class="pobs"><span>Observações:</span> ${t(pm.obs)}</div>
+    <table class="pass"><tr><td><span>Operador:</span> ${t(pm.operador || d.bol.sondador)}</td><td><span>Responsável:</span> ${atr(resp)}${crea ? `<br><small>${atr(crea)}</small>` : ''}</td><td class="fl">Folha:<br><b>${folhaTxt}</b></td></tr></table>
+  </div>`;
+}
+const CSS_PERM = `
+  .folha.nperm .titulo small{font-size:9pt}
+  .folha.nperm .pid td{border-bottom:.3mm solid #000;padding:1.2mm 1.6mm;font-size:8.4pt} .folha.nperm .pid span,.folha.nperm .pobs span,.folha.nperm .pass span{font-weight:700}
+  .folha.nperm .pcorpo{display:grid;grid-template-columns:1fr 1fr;border-bottom:.35mm solid #000;flex:1}
+  .folha.nperm .pesq{border-right:.35mm solid #000} .folha.nperm .ph{background:#eee;font-weight:700;text-align:center;padding:1mm;border-top:.3mm solid #000;border-bottom:.3mm solid #000}
+  .folha.nperm .pop{display:flex;justify-content:space-between;align-items:center;padding:1mm 2mm;font-size:8.4pt}
+  .folha.nperm .cxp{display:inline-block;width:5mm;height:4.2mm;border:.35mm solid #000;text-align:center;font-weight:700;line-height:4mm}
+  .folha.nperm .pgeo{display:grid;grid-template-columns:30mm 1fr;gap:1mm;padding:1.5mm} .folha.nperm .pgeo svg{width:30mm;height:72mm}
+  .folha.nperm .pg-v td{font-size:7.8pt;padding:1mm .8mm;border-bottom:.2mm solid #999} .folha.nperm .pg-v td.v{text-align:right;white-space:nowrap}
+  .folha.nperm .plt th,.folha.nperm .plt td{border:.3mm solid #000;text-align:center;padding:1mm;font-size:8.2pt} .folha.nperm .plt th{background:#f3f3f3;font-weight:700}
+  .folha.nperm .pk{padding:1.5mm 2mm;font-weight:700;border-bottom:.3mm solid #000}
+  .folha.nperm .pobs{padding:1.5mm 2mm;min-height:18mm;border-bottom:.35mm solid #000}
+  .folha.nperm .pass td{padding:1.5mm 2mm;vertical-align:top;font-size:8.2pt} .folha.nperm .pass .fl{width:18mm;text-align:center;border-left:.35mm solid #000}`;
+
 /** Folha do boletim no PDF do laudo de solos (vem antes das folhas do laboratório). */
 function folhaSlabBol(pacote) {
   const s = estado.slab;
   if (estado.modo !== 'slab' || !s || !(bolPreenchido(s.bol) || Object.values(s.bolOutros || {}).some(bolPreenchido))) return [];
   const ds = dadosBoletinsDoEnsaio(), ult = ds[ds.length - 1], fotos = fotosBolProntas(ult.p);
-  const folhas = ds.map((d, i) => { const f = i === ds.length - 1 && fotos.length;
-    return `<style>${CSS_BOLETIM}${CSS_SPT}</style>` + (d.bol.tipo === 'spt' ? htmlFolhaSpt(d, f ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(d, f ? '1/2' : 'Única')); });
-  // o registro fotográfico do furo vai junto, como no PDF do plano
-  if (fotos.length) folhas.push(`<style>${CSS_BOLETIM}</style>` + htmlFolhaFotosBol(ult.estaca || (ult.p && ult.p.st), ult.cliente, fotos));
+  const folhas = [];
+  ds.forEach((d, i) => folhas.push(...folhasDoFuroBol(d, i === ds.length - 1 ? fotos : []).map(h => `<style>${CSS_BOLETIM}${CSS_SPT}${CSS_PERM}</style>` + h)));
   return folhas;
 }
 
 /** A folha do registro fotográfico (até 6 fotos do campo), depois do boletim. */
-function htmlFolhaFotosBol(st, cliente, fotos) {
+function htmlFolhaFotosBol(st, cliente, fotos, folhaTxt = '2/2') {
   const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
   const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
   const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
@@ -28333,7 +28606,7 @@ function htmlFolhaFotosBol(st, cliente, fotos) {
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(st)} · ${atr(cliente || '')}</div>
       <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${distTexto(f.dist)} do ponto` : ''}</figcaption></figure>`).join('')}</div>
-      <table class="coord"><tr><td class="r fl">Folha:<br><span>2/2</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
+      <table class="coord"><tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
     </div>`;
 }
 /* Fotos do campo para o PDF do ensaio (aba Boletim / laudo): a montagem das folhas não espera,
@@ -28367,13 +28640,11 @@ async function htmlBoletins(pl, pontos, { semFotos = false } = {}) {
     const ds = dadosBoletinsDoPonto(p, pl), d = ds[ds.length - 1];
     const fotos = [];
     if (!semFotos) for (const f of (d.so.fotos || []).slice(0, 6)) { const u = await dadosDaFoto(f); if (u) fotos.push({ f, u }); }
-    ds.forEach((x, i) => { const ult = i === ds.length - 1;
-      folhas.push(x.bol.tipo === 'spt' ? htmlFolhaSpt(x, ult && fotos.length ? '1 / 2' : '1 / 1') : htmlFolhaBoletim(x, ult && fotos.length ? '1/2' : 'Única')); });
-    if (fotos.length) folhas.push(htmlFolhaFotosBol(p.st, d.cliente, fotos));
+    ds.forEach((x, i) => folhas.push(...folhasDoFuroBol(x, i === ds.length - 1 ? fotos : [])));
   }
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Boletins de sondagem — plano ${atr(pl.codigo)}</title><style>
     @page{size:A4;margin:9mm 8mm} body{margin:0}
-    ${CSS_BOLETIM}${CSS_SPT}
+    ${CSS_BOLETIM}${CSS_SPT}${CSS_PERM}
     .folha.nbol{break-after:page} .folha.nbol:last-child{break-after:auto}
   </style></head><body>${folhas.join('')}</body></html>`;
 }
@@ -28405,6 +28676,10 @@ function htmlAbaBoletimSlab() {
   b.spt = b.spt || []; b.metodos = b.metodos || {}; ['cavadeira', 'espiral', 'lavagem'].forEach(k => { b.metodos[k] = b.metodos[k] || { de: null, ate: null }; });
   b.lavTempo = b.lavTempo || { inicio: null, e1: null, e2: null, e3: null };
   sincronizarNa(b); b.naLeituras = b.naLeituras || [];
+  b.naApos = { ...naAposVazio(), ...(b.naApos || {}) };
+  const pv = permVazio(); b.perm = { ...pv, ...(b.perm || {}) };
+  ['cc', 'cv'].forEach(k => { b.perm[k] = Array.from({ length: LINHAS_PERM }, (_, i) => ({ ...pv[k][0], ...((b.perm[k] || [])[i] || {}) })); });
+  const pm = b.perm;
   const tipoBt = (k, rot, sub) => `<button type="button" class="pl-passo${b.tipo === k ? ' feito proximo' : ''}" data-boltipo="${k}"><span class="rot">${rot}</span><span class="hr">${sub}</span></button>`;
   const geoOp = [['', ''], ...GEO_SPT.map(([k, t]) => [k, `${k} — ${t}`])];
   const camadasHtml = (b.camadas || []).map((c, i) => `<div class="pl-cam">
@@ -28419,38 +28694,50 @@ function htmlAbaBoletimSlab() {
       </div><p class="hint" data-bolcota="${i}" style="margin:6px 0 0">${textoCotaCamada(b, i)}</p></div>`).join('');
   const linhasSpt = b.spt.map((l, i) => {
     const r = nSpt(l), c = camadaNaProf(b.camadas, i + 1) || camadaNaProf(b.camadas, i + 0.5);
-    return `<tr><td class="cap">${i + 1},00</td>${[0, 1, 2].map(k => `<td data-rot="${k + 1}º golpes">${nSl(`bol.spt.${i}.g.${k}`, '1')}</td><td data-rot="cm" class="pen">${nSl(`bol.spt.${i}.p.${k}`, '1').replace('<input ', '<input placeholder="15" ')}</td>`).join('')}
+    return `<tr><td class="cap">${i + 1},00</td><td data-rot="Prof. revest. (m)">${nSl(`bol.spt.${i}.rev`, '0.01')}</td>${[0, 1, 2].map(k => `<td data-rot="${k + 1}º golpes">${nSl(`bol.spt.${i}.g.${k}`, '1')}</td><td data-rot="cm" class="pen">${nSl(`bol.spt.${i}.p.${k}`, '1').replace('<input ', '<input placeholder="15" ')}</td>`).join('')}
       <td class="num forte" data-sptn="${i}">${r ? r.txt : '—'}</td>
-      <td>${tSl(`bol.spt.${i}.compac`, r ? classeSpt(r.n, c && c.material) : '')}</td></tr>`; }).join('');
+      <td>${tSl(`bol.spt.${i}.compac`, r ? classeSpt(r.n, c && c.material) : '')}</td>
+      <td data-rot="Torque máx. (kgf.m)">${nSl(`bol.spt.${i}.tq`, '0.1')}</td><td data-rot="Torque resid. (kgf.m)">${nSl(`bol.spt.${i}.tr`, '0.1')}</td>
+      <td data-rot="Mudança de camada (m)">${nSl(`bol.spt.${i}.mud`, '0.01')}</td><td data-rot="Material">${tSl(`bol.spt.${i}.mat`, '', false)}</td><td data-rot="Complemento">${tSl(`bol.spt.${i}.compl`, '', false)}</td>
+      <td data-rot="Cor">${tSl(`bol.spt.${i}.cor`, '', false)}</td><td data-rot="Interp. geológica">${tSl(`bol.spt.${i}.geo`, 'Ex.: SR', false)}</td></tr>`; }).join('');
   const gridHtml = `      <div class="grid4">
         <div><label>${spt ? 'Início' : 'Data de execução'}</label>${dSl('bol.data')}</div>
-        ${spt ? `<div><label>Fim</label>${dSl('bol.dataFim')}</div>` : ''}
+        ${spt ? `<div><label>Fim</label>${dSl('bol.dataFim')}</div>
+        <div><label>Hora de início</label>${hSl('bol.horaIni')}</div><div><label>Hora de término</label>${hSl('bol.horaFim')}</div>` : ''}
         <div><label>Sondador</label>${tSl('bol.sondador')}</div>
         ${spt ? `<div><label>Verificação</label>${tSl('bol.verificacao', '', false)}</div>` : ''}
         <div><label>Profundidade do furo (m)</label>${nSl('bol.prof', '0.01')}</div>
         <div><label>Cota (m) <span class="hint">opcional</span></label>${nSl('bol.cota', '0.001')}</div>
+        ${spt ? `<div><label>RN <span class="hint">referência de nível</span></label>${tSl('bol.rn', '', false)}</div>
+        <div><label>Tempo</label>${selSl('bol.tempo', op(TEMPOS_CLIMA, true))}</div>` : ''}
         ${spt ? '' : `<div><label>Relevo</label>${selSl('bol.relevo', op(RELEVOS))}</div>
         <div><label>Vegetação</label>${selSl('bol.vegetacao', op(VEGETACOES))}</div>
         <div><label>Terreno</label>${selSl('bol.terreno', op(TERRENOS, true))}</div>`}
         <div><label>Nível d'água</label>${selSl('bol.naSeco', [['', 'Sim (encontrado / a medir)'], ['1', 'Seco']]).replace('<select ', '<select data-remonta="1" ')}</div>
         <div style="grid-column:span 2"><label>${spt ? 'Final do furo' : 'Furo paralisado por'}</label>${selSl('bol.parada', op(spt ? [...PARADAS_SPT, ...PARADAS_SPT_ANTIGAS.filter(x => x[0] === b.parada)] : PARADAS, true))}</div>
-        ${spt ? `<div style="grid-column:span 2"><label>Contrato nº <span class="hint">em branco: OS + prefixo + obra</span></label>${tSl('bol.contrato', '', false)}</div>
+        ${spt ? `<div style="grid-column:span 2"><label>Critério (impenetrável à percussão)</label>${selSl('bol.paradaCrit', op(CRITERIOS_PERCUSSAO, true))}</div>
+        <div style="grid-column:span 2"><label>Contrato nº <span class="hint">em branco: OS + prefixo + obra</span></label>${tSl('bol.contrato', '', false)}</div>
         <div><label>Revisão</label>${tSl('bol.revisao', 'R0')}</div>`
           : `<div style="grid-column:span 2"><label>Outras informações <span class="hint">em branco: km, amostra e hora do furo</span></label>${tSl('bol.outras', '', false)}</div>`}
         <div style="grid-column:span 4"><label>Observações</label>${tSl('bol.obs', '', false)}</div>
       </div>`;
   const naHtml = `<h3 class="sub-card">Nível d'água — leituras <span class="hint">uma linha por leitura (o N.A. costuma ser lido por 3 ou 4 dias)</span></h3>
-      ${b.naSeco ? '<p class="hint">Furo seco.</p>' : `<div class="tabwrap"><table class="t-form pl-na"><thead><tr><th>Leitura</th><th>Data</th><th>Hora</th><th>Prof. do furo (m)</th><th>N.A. (m)</th><th></th></tr></thead>
+      ${b.naSeco ? '<p class="hint">Furo seco.</p>' : `<div class="tabwrap"><table class="t-form pl-na"><thead><tr><th>Leitura</th><th>Data</th><th>Hora</th><th>Prof. do furo (m)</th>${spt ? '<th>Prof. revest. (m)</th>' : ''}<th>N.A. (m)</th><th></th></tr></thead>
         <tbody>${b.naLeituras.map((l, i) => `<tr><td class="cap">${i + 1}</td><td data-rot="Data">${dSl(`bol.naLeituras.${i}.data`)}</td><td data-rot="Hora">${hSl(`bol.naLeituras.${i}.hora`)}</td>
-          <td data-rot="Prof. do furo">${nSl(`bol.naLeituras.${i}.prof`, '0.01')}</td><td data-rot="N.A.">${nSl(`bol.naLeituras.${i}.na`, '0.01')}</td>
+          <td data-rot="Prof. do furo">${nSl(`bol.naLeituras.${i}.prof`, '0.01')}</td>${spt ? `<td data-rot="Prof. revest.">${nSl(`bol.naLeituras.${i}.rev`, '0.01')}</td>` : ''}<td data-rot="N.A.">${nSl(`bol.naLeituras.${i}.na`, '0.01')}</td>
           <td><button class="btn ghost sm" type="button" data-bolnatira="${i}" title="Tirar leitura">✕</button></td></tr>`).join('')
           || '<tr><td colspan="6" class="hint">Toque em + Leitura para lançar o nível d\'água.</td></tr>'}</tbody></table></div>`}
-      ${b.naSeco ? '' : '<div class="rasc-botoes" style="margin-top:8px"><button class="btn ghost sm" type="button" id="bolNaMais">+ Leitura</button></div>'}`;
+      ${b.naSeco ? '' : '<div class="rasc-botoes" style="margin-top:8px"><button class="btn ghost sm" type="button" id="bolNaMais">+ Leitura</button></div>'}
+      ${spt ? `<h3 class="sub-card">N.A. após o término <span class="hint">profundidade (m) em cada tempo</span></h3>
+      <div class="grid4"><div><label>Dia</label>${dSl('bol.naApos.dia')}</div><div><label>Hora</label>${hSl('bol.naApos.hora')}</div></div>
+      <div class="grid4" style="margin-top:8px">${TEMPOS_NA_APOS.map(([k, t]) => `<div><label>${t}</label>${nSl(`bol.naApos.${k}`, '0.01')}</div>`).join('')}</div>` : ''}`;
   const golpesHtml = `<h3 class="sub-card">Golpes (SPT) — por metro <span class="hint">penetração em branco = 15 cm</span></h3>
-      <div class="tabwrap"><table class="t-form pl-spt"><thead><tr><th>Prof. (m)</th><th>1º</th><th>cm</th><th>2º</th><th>cm</th><th>3º</th><th>cm</th><th>N-SPT</th><th>Compacidade / consistência</th></tr></thead>
-        <tbody>${linhasSpt || '<tr><td colspan="9" class="hint">Toque em + Metro para lançar os golpes de cada metro.</td></tr>'}</tbody></table></div>
+      <div class="tabwrap"><table class="t-form pl-spt"><thead><tr><th>Prof. (m)</th><th>Revest. (m)</th><th>1º</th><th>cm</th><th>2º</th><th>cm</th><th>3º</th><th>cm</th><th>N-SPT</th><th>Compacidade / consistência</th>
+        <th>Torque máx.</th><th>Torque resid.</th><th>Mudança de camada (m)</th><th>Material</th><th>Complemento</th><th>Cor</th><th>Interp. geol.</th></tr></thead>
+        <tbody>${linhasSpt || '<tr><td colspan="17" class="hint">Toque em + Metro para lançar os golpes de cada metro.</td></tr>'}</tbody></table></div>
       <div class="rasc-botoes" style="margin-top:8px"><button class="btn ghost sm" type="button" id="bolSptMais">+ Metro</button>
-        ${b.spt.length ? '<button class="btn ghost sm" type="button" id="bolSptMenos">✕ Último metro</button>' : ''}</div>`;
+        ${b.spt.length ? '<button class="btn ghost sm" type="button" id="bolSptMenos">✕ Último metro</button>' : ''}
+        ${b.spt.some(l => ['mat', 'compl', 'cor', 'geo'].some(k => String(l[k] || '').trim()) || ehNumero(l.mud)) ? '<button class="btn ghost sm" type="button" id="bolCamadasDasLinhas">Montar as camadas pela coluna Material</button>' : ''}</div>`;
   const metodosHtml = `      <h3 class="sub-card">Método de perfuração (m)</h3>
       <div class="grid4">
         <div><label>T. cavadeira — início</label>${nSl('bol.metodos.cavadeira.de', '0.01')}</div><div><label>T. cavadeira — término</label>${nSl('bol.metodos.cavadeira.ate', '0.01')}</div>
@@ -28465,6 +28752,35 @@ function htmlAbaBoletimSlab() {
   const camadasBloco = `      <h3 class="sub-card">Camadas do solo (descrição ${spt ? 'do material' : 'tátil-visual'})</h3>
       <div class="pl-camadas">${camadasHtml || '<p class="hint">Descreva o solo do furo, de cima para baixo.</p>'}</div>
       <button class="btn ghost sm" type="button" id="bolCamada">+ Camada</button>`;
+  const permHtml = !pm.ativo ? `<p class="hint" style="margin:0 0 8px">Ensaio de infiltração à carga constante e variável (Mod045). Só quando o furo tiver o ensaio:
+      ligado, o rascunho ganha a 2ª folha e o boletim ganha a folha do ensaio.</p>
+      <button class="btn ghost" type="button" id="bolPermLigar">＋ Este furo tem ensaio de permeabilidade</button>`
+    : `<div class="grid4">
+        <div><label>Ensaio nº</label>${tSl('bol.perm.numero', '', false)}</div><div><label>Data</label>${dSl('bol.perm.data')}</div>
+        <div><label>Profundidade (m)</label>${nSl('bol.perm.prof', '0.01')}</div><div><label>Revestimento</label>${tSl('bol.perm.revest', 'Ex.: 2 1/2"', false)}</div>
+        <div><label>Hora de início</label>${hSl('bol.perm.horaIni')}</div><div><label>Hora de término</label>${hSl('bol.perm.horaFim')}</div>
+        <div style="grid-column:span 2"><label>Ensaio realizado</label>${selSl('bol.perm.realizado', op(REALIZADO_PERM, true))}</div>
+        <div style="grid-column:span 2"><label>Condições de medida</label>${selSl('bol.perm.medida', op(MEDIDA_PERM, true))}</div>
+      </div>
+      <h3 class="sub-card">Geometria do ensaio</h3>
+      <div class="grid4">
+        <div><label>Boca do revestimento acima do terreno (m)</label>${nSl('bol.perm.alturaBoca', '0.01')}</div>
+        <div><label>N.A. antes do ensaio (m)</label>${nSl('bol.perm.naAntes', '0.01')}</div><div><label>N.A. adotado (m)</label>${nSl('bol.perm.naAdotado', '0.01')}</div>
+        <div><label>Prof. da sapata do revestimento (m)</label>${nSl('bol.perm.sapata', '0.01')}</div>
+        <div><label>Trecho ensaiado — sapata ao fundo (m)</label>${nSl('bol.perm.trecho', '0.01')}</div>
+        <div><label>Ø int. do tubo (cm)</label>${nSl('bol.perm.dTubo', '0.01')}</div><div><label>Ø int. do furo (cm)</label>${nSl('bol.perm.dFuro', '0.01')}</div>
+      </div>
+      <div class="lado-a-lado" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:10px">
+        <div><h3 class="sub-card">Carga constante</h3><div class="tabwrap"><table class="t-form"><thead><tr><th></th><th>Hora</th><th>Nível de água no tambor (cm)</th></tr></thead><tbody>
+          ${pm.cc.map((l, i) => `<tr><td class="cap">${i + 1}</td><td data-rot="Hora">${hSl(`bol.perm.cc.${i}.hora`)}</td><td data-rot="Nível no tambor (cm)">${nSl(`bol.perm.cc.${i}.leit`, '0.1')}</td></tr>`).join('')}</tbody></table></div>
+          <label style="margin-top:6px">Coeficiente de permeabilidade (cm/s)</label>${tSl('bol.perm.kCC', 'Ex.: 3,2 × 10⁻⁴', false)}</div>
+        <div><h3 class="sub-card">Carga variável</h3><div class="tabwrap"><table class="t-form"><thead><tr><th></th><th>Hora</th><th>Altura da água no tubo (m)</th></tr></thead><tbody>
+          ${pm.cv.map((l, i) => `<tr><td class="cap">${i + 1}</td><td data-rot="Hora">${hSl(`bol.perm.cv.${i}.hora`)}</td><td data-rot="Altura no tubo (m)">${nSl(`bol.perm.cv.${i}.alt`, '0.01')}</td></tr>`).join('')}</tbody></table></div>
+          <label style="margin-top:6px">Coeficiente de permeabilidade (cm/s)</label>${tSl('bol.perm.kCV', 'Ex.: 1,5 × 10⁻⁴', false)}</div>
+      </div>
+      <div class="grid4" style="margin-top:10px"><div style="grid-column:span 3"><label>Observações</label>${tSl('bol.perm.obs', '', false)}</div>
+        <div><label>Operador</label>${tSl('bol.perm.operador', '', false)}</div></div>
+      <div class="rasc-botoes" style="margin-top:10px"><button class="btn ghost sm perigo" type="button" id="bolPermDesligar">Tirar o ensaio de permeabilidade deste furo</button></div>`;
   // SPT: cada folha da ficha NS-L2P num bloco que recolhe, com a sua própria foto (uma foto por folha)
   const resumoF1 = [ehNumero(b.prof) ? fmt(b.prof, 2) + ' m' : '', (b.camadas || []).length ? b.camadas.length + ' camada(s)' : ''].filter(Boolean).join(' · ');
   const blocoFolha = (k, titulo, sub, idxs, html) => `<details class="pl-bloco bol-folha" data-bolfolha="${k}"${BOL_FOLHA_FECHADA[k] ? '' : ' open'}>
@@ -28482,8 +28798,9 @@ function htmlAbaBoletimSlab() {
       <div class="pl-passos" style="grid-template-columns:1fr 1fr">${tipoBt('trado', 'Trado', 'NBR 9603')}${tipoBt('spt', 'Percussão (SPT)', 'NBR 6484')}</div>
       <p class="hint" style="margin:0 0 10px">Cliente, obra, local, prefixo e OS vêm dos <b>dados gerais do plano</b> (ou da Identificação)<span id="bolFalta"></span>.
         A folha do boletim sai na frente do laudo.</p>
-      ${spt ? blocoFolha('f1', 'Folha 1 — furo, métodos e camadas', `NS-L2P 1/2${resumoF1 ? ' · ' + resumoF1 : ''}`, [0, 1, 2, 3], gridHtml + metodosHtml + camadasBloco)
-        + blocoFolha('f2', 'Folha 2 — nível d\'água e golpes por metro', `NS-L2P 2/2 · ${b.spt.length} metro(s)`, [4, 5], naHtml + golpesHtml)
+      ${spt ? blocoFolha('f1', 'Folha 1 — boletim de sondagem à percussão', `NS-L2P 1/${pm.ativo ? 2 : 1} · ${b.spt.length} metro(s)${resumoF1 ? ' · ' + resumoF1 : ''}`, FOLHA1_SPT, gridHtml + naHtml + golpesHtml + camadasBloco + metodosHtml)
+        + (pm.ativo ? blocoFolha('f2', 'Folha 2 — ensaio de permeabilidade', 'NS-L2P 2/2 · infiltração (Mod045)', FOLHA2_SPT, permHtml)
+          : `<div class="pl-bloco" style="padding:10px 12px"><b>Ensaio de permeabilidade</b> <span class="hint">opcional</span>${permHtml}</div>`)
         : gridHtml + naHtml + camadasBloco}
     </div>`;
 }
@@ -28526,11 +28843,17 @@ function ligarAbaBoletimSlab() {
     bt.addEventListener('click', () => { trocarFuroBol(+bt.dataset.bolfuro); montarSlab(); atualizar(); }); });
   document.querySelectorAll('[data-boltipo]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
     bt.addEventListener('click', () => { s.bol.tipo = bt.dataset.boltipo; montarSlab(); atualizar(); }); });
-  on('bolNaMais', () => { (s.bol.naLeituras = s.bol.naLeituras || []).push({ data: '', hora: '', prof: null, na: null }); montarSlab(); atualizar(); });
+  on('bolNaMais', () => { (s.bol.naLeituras = s.bol.naLeituras || []).push({ data: '', hora: '', prof: null, na: null, rev: null }); montarSlab(); atualizar(); });
   document.querySelectorAll('[data-bolnatira]').forEach(bt => { if (bt.dataset.ligadoBol) return; bt.dataset.ligadoBol = '1';
     bt.addEventListener('click', () => { s.bol.naLeituras.splice(+bt.dataset.bolnatira, 1); sincronizarNa(s.bol); montarSlab(); atualizar(); }); });
   on('bolSptMais', () => { s.bol.spt.push({ g: [null, null, null], p: [null, null, null], compac: '' }); montarSlab(); atualizar(); });
   on('bolSptMenos', () => { s.bol.spt.pop(); montarSlab(); atualizar(); });
+  on('bolPermLigar', () => { s.bol.perm = { ...permVazio(), ...(s.bol.perm || {}), ativo: true }; montarSlab(); atualizar(); });
+  on('bolPermDesligar', () => { s.bol.perm.ativo = false; montarSlab(); atualizar(); });   // os dados ficam: ligar de novo traz de volta
+  on('bolCamadasDasLinhas', () => {
+    const cs = camadasDasLinhasSpt(s.bol); if (!cs.length) return;
+    s.bol.camadas = cs; montarSlab(); atualizar();
+  });
   // "Até" de uma camada = "De" da camada de baixo (se ela estava vazia, em 0 ou com o valor antigo)
   document.querySelectorAll('[data-sl^="bol.camadas."][data-sl$=".ate"]').forEach(el => {
     if (el.dataset.ligadoEnc) return; el.dataset.ligadoEnc = '1';
