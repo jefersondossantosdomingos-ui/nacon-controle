@@ -12978,6 +12978,9 @@ function htmlFichasRascunho(abas = fichasDoModo(), preenchido = null) {
   .nc .q{height:5.6mm;border:.35mm solid #000;border-radius:.6mm;display:inline-block;min-width:22mm;vertical-align:middle}
   .nc .q.in{height:5mm;min-width:20mm} .nc .q.in.larga{min-width:45mm} .nc .q.alta{height:14mm;display:block}
   .nc td .q{display:inline-block} .nc .pre{font-weight:700}
+  /* nome impresso dentro dos quadros baixos do desenho NACON (sondador, nº do furo): letra menor, sem cortar */
+  .nc .q .pre{display:block;padding:.6mm 1.5mm 0;font-size:8.5pt;line-height:1.15;white-space:nowrap;overflow:visible}
+  .nc .q.in .pre{padding:.2mm 1.5mm 0;font-size:8pt} .nc .q.in.larga{min-width:70mm;height:auto;min-height:5mm}
   .nc-cab{display:grid;grid-template-columns:1.15fr 1fr;gap:2mm;margin-top:1mm}
   .nc-id{width:100%;border-collapse:collapse;table-layout:auto} .nc-id td{border:.3mm solid #000;padding:.35mm 1.2mm;font-size:8pt;height:auto;vertical-align:middle}
   .nc-id td span{font-weight:700;margin-right:1mm} .nc-id td .q{min-width:18mm;margin-right:2mm}
@@ -15268,7 +15271,8 @@ const FICHAS_SLAB = [
       fAt('Camada (profundidade)', 'camada', _slc('camada'), 'texto'), fAt('Local', 'local', _sl('ident.local'), 'texto', 2),
       fAt('Laboratoristas', 'labs', _sl('ident.laboratoristas'), 'texto', 2)] }] },
   // boletim de sondagem à trado (NBR 9603): a ficha que vai para o campo — o que tem opção é só marcar X (ou escrever em "Outro")
-  { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)', repeteCab: ['sondador'], compacta: true, densa: true, apertada: true,
+  { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2', titulo: 'Boletim de sondagem à trado (NBR 9603)', repeteCab: [],   // sondador em branco: cada equipe escreve o seu (28/11)
+    compacta: true, densa: true, apertada: true,
  nota: 'A foto pode ser também o boletim de campo do próprio sondador, em outro modelo: ache cada dado pelo rótulo (profundidade, cota, N.A., camadas de/até com a descrição do material, final do furo). Na descrição da camada, separe material (ex.: "Argila arenosa"), complemento (ex.: "com pedregulhos") e cor (ex.: "Marrom"). ' + LETRA_DIFICIL,
     quando: () => !(estado.slab && estado.slab.bol && estado.slab.bol.tipo === 'spt'),
     cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]],
@@ -15437,7 +15441,7 @@ const FICHA_SLAB_SPT = { aba: 'slbol', modo: 'slab', codigo: SIGLA_SL + '-L2P', 
     + 'N.A. durante a perfuração: cada coluna da tabela é uma leitura (dia, hora, prof. N.A., prof. revest., prof. sondagem). Após o término: a profundidade do N.A. em cada tempo. '
     + 'Se houver a 2ª folha (ensaio de permeabilidade, Mod045), leia também. ' + LETRA_DIFICIL,
   quando: () => !!(estado.slab && estado.slab.bol && estado.slab.bol.tipo === 'spt'),
-  cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]], repeteCab: ['sondador'], repete: [],
+  cabs: [CAB_SL[0], ['Sondador', 'sondador', 'cab.sondador', 'texto', _sl('bol.sondador')]], repeteCab: [], repete: [],   // rascunho sai com o sondador em branco (28/11)
   get blocos() { return permLigada() ? [...BLOCOS_SPT_F1, ...BLOCOS_SPT_F2] : BLOCOS_SPT_F1; },
   desenho: ctx => desenhoFichaSpt(ctx),
   // lido o rascunho: sem camadas lançadas, a coluna Material (com a mudança de camada) vira as camadas do boletim
@@ -18170,6 +18174,13 @@ function linhaQrSlab(e) {
       f(r.dmax == null ? null : r.dmax / 1000, 3), f(r.hot, 1), f(r.cbr, 1), f(r.expansao, 1), f(ins.gs, 3), f(ins.w, 1)],
   };
 }
+/** Quem fez os ensaios de um ensaio de solos salvo: laboratoristas de cada aba, operador do in situ e do MCT. */
+function labsDoEnsaioQr(e) {
+  const est = (e.foto || {}).estado || {}, sl = est.slab || {}, lab = (sl.ident || {}).lab || {};
+  const nomes = [...Object.values(lab), (sl.insitu || {}).operador, (sl.mct || {}).operador];
+  const limpos = nomes.map(x => String(x || '').trim().toUpperCase()).filter(Boolean);
+  return limpos.length ? limpos : [String((est.medicao || {}).laboratorista || e.laboratorista || '').trim().toUpperCase()].filter(Boolean);
+}
 function folhasQrSlab(ensaios) {
   const linhas = ensaios.map(linhaQrSlab), n = Math.max(1, Math.ceil(linhas.length / LINHAS_QR_SLAB));
   const r0 = (ensaios[0] || {}).resumo || {};
@@ -18188,7 +18199,7 @@ function folhasQrSlab(ensaios) {
     .qrs table.t td.st{font-weight:700;font-size:6.6pt} .qrs table.t td.st small{display:block;font-weight:400;font-size:4.8pt} .qrs table.t td.loc{text-align:left;font-size:5.4pt;line-height:1.5}
     .qrs table.t tbody tr{height:9mm}
     .qrs .rod{display:grid;grid-template-columns:1fr 70mm;border:.2mm solid #000;border-top:0;font-size:7pt;min-height:16mm}
-    .qrs .rod > div{padding:1mm} .qrs .rod .ap{border-left:.2mm solid #000} .qrs .rod .ass{text-align:center;margin-top:7mm;font-weight:700;font-size:7pt;line-height:1.3}
+    .qrs .rod > div{padding:1mm} .qrs .rod .labs{margin-top:3mm;font-size:7pt} .qrs .rod .ap{border-left:.2mm solid #000} .qrs .rod .ass{text-align:center;margin-top:7mm;font-weight:700;font-size:7pt;line-height:1.3}
   </style>`;
   const cab1 = `<tr><th rowspan="2">Estaca/<br>Furo</th><th rowspan="2">Localização</th><th rowspan="2">Km</th><th rowspan="2">Camada<br>(m)</th>
     <th colspan="14">Granulometria (% Passando)</th><th colspan="6">Resumo da Granulometria</th><th colspan="3">Limites</th><th colspan="3">Classificação</th>
@@ -18200,6 +18211,7 @@ function folhasQrSlab(ensaios) {
   const folhas = [];
   for (let k = 0; k < n; k++) {
     const parte = linhas.slice(k * LINHAS_QR_SLAB, (k + 1) * LINHAS_QR_SLAB);
+    const labs = [...new Set(ensaios.slice(k * LINHAS_QR_SLAB, (k + 1) * LINHAS_QR_SLAB).flatMap(labsDoEnsaioQr))];
     while (parte.length < LINHAS_QR_SLAB) parte.push(null);
     const corpo = parte.map(l => l ? `<tr><td class="st">${esc(l.furo)}</td><td class="loc">${esc(l.n)}<br>${esc(l.e)}</td><td>${esc(l.km)}</td><td>${esc(l.camada)}</td>${l.vals.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`
       : `<tr><td></td><td></td><td></td><td></td>${'<td></td>'.repeat(34)}</tr>`).join('');
@@ -18210,7 +18222,7 @@ function folhasQrSlab(ensaios) {
         <tr><td class="k">Obra:</td><td class="v">${esc(r0.obra || '')}</td><td class="k2">Nº Registro e OS:</td><td class="v2">${esc(r0.os || '')}</td></tr>
         <tr><td class="k">Local:</td><td class="v">${esc(r0.local || '')}</td><td class="k2">Folha:</td><td class="v2">${String(k + 1).padStart(2, '0')}/${String(n).padStart(2, '0')}</td></tr></table>
       <table class="t"><colgroup>${COLS_QR_SLAB}</colgroup><thead>${cab1}</thead><tbody>${corpo}</tbody></table>
-      <div class="rod"><div><b>OBSERVAÇÕES:</b></div><div class="ap"><b>APROVADO:</b><div class="ass">${esc(resp)}${crea ? '<br>' + esc(crea) : ''}</div></div></div></div>`);
+      <div class="rod"><div><b>OBSERVAÇÕES:</b>${labs.length ? `<div class="labs"><b>${labs.length > 1 ? 'Laboratoristas' : 'Laboratorista'}:</b> ${labs.map(esc).join(', ')}</div>` : ''}</div><div class="ap"><b>APROVADO:</b><div class="ass">${esc(resp)}${crea ? '<br>' + esc(crea) : ''}</div></div></div></div>`);
   }
   return folhas;
 }
@@ -28522,7 +28534,7 @@ function folhasDoFuroBol(d, fotos = []) {
   const sp = k => spt ? `${k} / ${n}` : (n === 1 ? 'Única' : `${k}/${n}`);
   const out = [spt ? htmlFolhaSpt(d, sp(1)) : htmlFolhaBoletim(d, sp(1))];
   if (perm) out.push(htmlFolhaPerm(d, `2/${n}`));
-  if (fotos.length) out.push(htmlFolhaFotosBol(d.estaca || (d.p && d.p.st), d.cliente, fotos, `${n}/${n}`));
+  if (fotos.length) out.push(htmlFolhaFotosBol(d.estaca || (d.p && d.p.st), d.cliente, fotos, `${n}/${n}`, d.bol.sondador || (d.so && d.so.equipe) || ''));
   return out;
 }
 
@@ -28598,7 +28610,9 @@ function folhaSlabBol(pacote) {
 }
 
 /** A folha do registro fotográfico (até 6 fotos do campo), depois do boletim. */
-function htmlFolhaFotosBol(st, cliente, fotos, folhaTxt = '2/2') {
+function htmlFolhaFotosBol(st, cliente, fotos, folhaTxt = '2/2', sondador = '') {
+  // quem fez: o sondador do boletim e quem tirou cada foto
+  const quem = [...new Set([sondador, ...fotos.map(x => x.f && x.f.por)].map(x => String(x || '').trim().toUpperCase()).filter(Boolean))];
   const logo = (typeof logoAtual === 'function' && logoAtual()) || '';
   const M = (typeof MARCA === 'object' && MARCA) || {}, S = (estado.slab && estado.slab.cfg) || M.slab || {};
   const endereco = String(S.endereco || M.endereco || '').split('\n').filter(Boolean);
@@ -28606,7 +28620,7 @@ function htmlFolhaFotosBol(st, cliente, fotos, folhaTxt = '2/2') {
       <table class="cab"><tr><td class="logo">${logo ? `<img src="${logo}" alt="">` : ''}</td><td class="end">${endereco.map(atr).join('<br>')}</td></tr></table>
       <div class="titulo">REGISTRO FOTOGRÁFICO — ${atr(st)} · ${atr(cliente || '')}</div>
       <div class="grade-fotos">${fotos.map(({ f, u }) => `<figure><img src="${u}" alt=""><figcaption><b>${(ETAPAS_FOTO.find(x => x[0] === f.etapa) || ['', 'Foto'])[1]}</b> · ${dataHoraBr(f.em)}${ehNumero(f.lat) ? ` · ${f.lat.toFixed(6)}, ${f.lon.toFixed(6)}` : ''}${ehNumero(f.dist) ? ` · a ${distTexto(f.dist)} do ponto` : ''}</figcaption></figure>`).join('')}</div>
-      <table class="coord"><tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).</td></tr></table>
+      <table class="coord"><tr><td class="r fl">Folha:<br><span>${folhaTxt}</span></td><td class="obs">Data, hora e coordenada gravadas na foto no momento do registro (GPS do aparelho).${quem.length ? `<br><b>${quem.length > 1 ? 'Equipe' : 'Sondador'}:</b> ${quem.map(atr).join(', ')}` : ''}</td></tr></table>
     </div>`;
 }
 /* Fotos do campo para o PDF do ensaio (aba Boletim / laudo): a montagem das folhas não espera,
